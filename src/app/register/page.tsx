@@ -2,21 +2,41 @@
 
 import type React from "react"
 import Link from "next/link"
-import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 import {
   RiFacebookFill,
   RiLinkedinBoxFill,
   RiUser3Fill,
   RiMailFill,
-  RiLockFill
+  RiLockFill,
 } from "@remixicon/react"
+import { useAuth } from "@/contexts/AuthContext"
+import { authAPI } from "@/lib/api"
+import { Alert } from "@/components/Alert"
 
 export default function RegisterPage() {
+  const router = useRouter()
+  const { login, isAuthenticated } = useAuth()
   const [formData, setFormData] = useState({
-    username: "",
     email: "",
     password: "",
+    full_name: "",
+    phone: "",
   })
+  const [isLoading, setIsLoading] = useState(false)
+  const [alert, setAlert] = useState<{
+    show: boolean
+    type: "success" | "error"
+    message: string
+  } | null>(null)
+
+  // Redirect jika sudah login
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/")
+    }
+  }, [isAuthenticated, router])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -25,22 +45,71 @@ export default function RegisterPage() {
     })
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Register:", formData)
+    setIsLoading(true)
+    setAlert(null) // Reset alert
+
+    try {
+      const response = await authAPI.register(formData)
+
+      if (response.success && response. data) {
+        login(response.data.token, response.data.user)
+
+        // Tampilkan alert sukses
+        setAlert({
+          show: true,
+          type: "success",
+          message: `Registrasi berhasil! Selamat datang, ${response. data.user.full_name}`,
+        })
+
+        // Redirect setelah 2 detik
+        setTimeout(() => {
+          router.push("/")
+        }, 2000)
+      } else {
+        // Tampilkan alert error
+        setAlert({
+          show: true,
+          type: "error",
+          message: response.message || "Terjadi kesalahan saat registrasi",
+        })
+      }
+    } catch (error) {
+      // Tampilkan alert error
+      setAlert({
+        show: true,
+        type: "error",
+        message:
+            error instanceof Error
+                ? error. message
+                : "Terjadi kesalahan saat registrasi",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Jika sudah login, tampilkan loading
+  if (isAuthenticated) {
+    return (
+        <div className="min-h-screen flex items-center justify-center">
+          <p>Redirecting... </p>
+        </div>
+    )
   }
 
   return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-4xl">
           <div className="flex flex-col md:flex-row rounded-2xl overflow-hidden shadow-2xl">
-
             {/* Left Side - Brand */}
             <div className="bg-primary-red text-white p-8 md:p-12 md:w-1/2 flex flex-col justify-center space-y-6">
               <h1 className="text-5xl font-bold">Zambel</h1>
               <p className="text-lg font-semibold opacity-90">Selamat Datang</p>
               <p className="text-base opacity-80 leading-relaxed">
-                Kami hadir untuk menghadirkan sambal berkualitas tinggi, dibuat dari bahan pilihan dengan cita rasa autentik Indonesia.
+                Kami hadir untuk menghadirkan sambal berkualitas tinggi, dibuat
+                dari bahan pilihan dengan cita rasa autentik Indonesia.
               </p>
 
               {/* Social Icons */}
@@ -65,8 +134,16 @@ export default function RegisterPage() {
               <h2 className="text-primary-red text-2xl font-bold mb-2">Daftar</h2>
               <p className="text-gray-600 text-sm mb-8">Daftarkan akun anda</p>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Alert Banner */}
+              {alert?.show && (
+                  <Alert
+                      type={alert.type}
+                      message={alert.message}
+                      onClose={() => setAlert(null)}
+                  />
+              )}
 
+              <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Username */}
                 <div>
                   <label className="block text-gray-700 text-sm font-medium mb-2">
@@ -77,10 +154,12 @@ export default function RegisterPage() {
                     <input
                         type="text"
                         name="username"
-                        value={formData.username}
+                        value={formData.email}
                         onChange={handleChange}
                         className="flex-1 ml-3 outline-none bg-transparent"
                         placeholder="Masukkan username"
+                        required
+                        disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -95,10 +174,12 @@ export default function RegisterPage() {
                     <input
                         type="email"
                         name="email"
-                        value={formData.email}
+                        value={formData. email}
                         onChange={handleChange}
                         className="flex-1 ml-3 outline-none bg-transparent"
                         placeholder="Masukkan email"
+                        required
+                        disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -117,6 +198,9 @@ export default function RegisterPage() {
                         onChange={handleChange}
                         className="flex-1 ml-3 outline-none bg-transparent"
                         placeholder="Masukkan password"
+                        required
+                        minLength={6}
+                        disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -124,9 +208,10 @@ export default function RegisterPage() {
                 {/* Submit Button */}
                 <button
                     type="submit"
-                    className="w-full bg-primary-red text-white font-semibold py-3 rounded-lg hover:bg-red-700 transition mt-6"
+                    disabled={isLoading}
+                    className="w-full bg-primary-red text-white font-semibold py-3 rounded-lg hover:bg-red-700 transition mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Daftar
+                  {isLoading ? "Memproses..." : "Daftar"}
                 </button>
               </form>
 
@@ -134,13 +219,15 @@ export default function RegisterPage() {
               <div className="text-center mt-6">
                 <p className="text-gray-600 text-sm">
                   Sudah punya akun?{" "}
-                  <Link href="/login" className="text-primary-red font-semibold hover:underline">
+                  <Link
+                      href="/login"
+                      className="text-primary-red font-semibold hover:underline"
+                  >
                     Masuk
                   </Link>
                 </p>
               </div>
             </div>
-
           </div>
         </div>
       </div>

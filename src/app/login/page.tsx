@@ -2,52 +2,117 @@
 
 import type React from "react"
 import Link from "next/link"
-import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 import {
   RiFacebookFill,
   RiGoogleFill,
   RiLinkedinBoxFill,
   RiUser3Fill,
-  RiLockFill
+  RiLockFill,
 } from "@remixicon/react"
+import { useAuth } from "@/contexts/AuthContext"
+import { authAPI } from "@/lib/api"
+import { Alert } from "@/components/Alert"
 
 export default function LoginPage() {
+  const router = useRouter()
+  const { login, isAuthenticated, isLoading: authLoading } = useAuth()
   const [formData, setFormData] = useState({
-    username: "",
+    email: "",
     password: "",
   })
+  const [isLoading, setIsLoading] = useState(false)
+  const [alert, setAlert] = useState<{
+    show: boolean
+    type: "success" | "error"
+    message: string
+  } | null>(null)
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Redirect jika sudah login - dengan blocking
+  useEffect(() => {
+    if (! authLoading && isAuthenticated) {
+      router.replace("/")
+    }
+  }, [isAuthenticated, authLoading, router])
+
+  const handleChange = (e: React. ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     })
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React. FormEvent) => {
     e.preventDefault()
-    console.log("Login:", formData)
+    setIsLoading(true)
+    setAlert(null)
+
+    try {
+      const response = await authAPI.login(formData)
+
+      if (response. success && response.data) {
+        login(response.data.token, response.data.user)
+        setTimeout(() => {
+          router.replace("/")
+        }, 1500)
+      } else {
+        setAlert({
+          show: true,
+          type: "error",
+          message: response.message || "Email atau password salah",
+        })
+      }
+    } catch (error) {
+      setAlert({
+        show: true,
+        type: "error",
+        message:
+            error instanceof Error
+                ? error.message
+                : "Terjadi kesalahan saat login",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Tampilkan loading saat cek authentication atau sudah login
+  if (authLoading || isAuthenticated) {
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-red"></div>
+            <p className="mt-4 text-gray-600">Loading...</p>
+          </div>
+        </div>
+    )
   }
 
   return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-4xl">
           <div className="flex flex-col md:flex-row rounded-2xl overflow-hidden shadow-2xl">
-
             {/* Left Side - Brand */}
             <div className="bg-primary-red text-white p-8 md:p-12 md:w-1/2 flex flex-col justify-center space-y-6">
               <h1 className="text-5xl font-bold">Zambel</h1>
               <p className="text-lg font-semibold opacity-90">Selamat Datang</p>
               <p className="text-base opacity-80 leading-relaxed">
-                Kami hadir untuk menghadirkan sambal berkualitas tinggi, dibuat dari bahan pilihan dengan cita rasa autentik Indonesia.
+                Kami hadir untuk menghadirkan sambal berkualitas tinggi, dibuat
+                dari bahan pilihan dengan cita rasa autentik Indonesia.
               </p>
 
-              {/* Social Icons */}
               <div className="flex gap-4 pt-4">
-                <a href="#" className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition">
+                <a
+                    href="#"
+                    className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition"
+                >
                   <RiLinkedinBoxFill className="w-5 h-5" />
                 </a>
-                <a href="#" className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition">
+                <a
+                    href="#"
+                    className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition"
+                >
                   <RiFacebookFill className="w-5 h-5" />
                 </a>
               </div>
@@ -58,27 +123,34 @@ export default function LoginPage() {
               <h2 className="text-primary-red text-2xl font-bold mb-2">Login</h2>
               <p className="text-gray-600 text-sm mb-8">Masuk ke akun anda</p>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              {alert?.show && (
+                  <Alert
+                      type={alert.type}
+                      message={alert.message}
+                      onClose={() => setAlert(null)}
+                  />
+              )}
 
-                {/* Username */}
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-gray-700 text-sm font-medium mb-2">
-                    Username
+                    Email
                   </label>
                   <div className="flex items-center border border-gray-300 rounded-lg px-4 py-3">
                     <RiUser3Fill className="w-5 h-5 text-gray-400" />
                     <input
-                        type="text"
-                        name="username"
-                        value={formData.username}
+                        type="email"
+                        name="email"
+                        value={formData.email}
                         onChange={handleChange}
                         className="flex-1 ml-3 outline-none bg-transparent"
-                        placeholder="Masukkan username"
+                        placeholder="Masukkan email"
+                        required
+                        disabled={isLoading}
                     />
                   </div>
                 </div>
 
-                {/* Password */}
                 <div>
                   <label className="block text-gray-700 text-sm font-medium mb-2">
                     Password
@@ -92,24 +164,28 @@ export default function LoginPage() {
                         onChange={handleChange}
                         className="flex-1 ml-3 outline-none bg-transparent"
                         placeholder="Masukkan password"
+                        required
+                        disabled={isLoading}
                     />
                   </div>
                 </div>
 
-                {/* Submit Button */}
                 <button
                     type="submit"
-                    className="w-full bg-primary-red text-white font-semibold py-3 rounded-lg hover:bg-red-700 transition mt-6"
+                    disabled={isLoading}
+                    className="w-full bg-primary-red text-white font-semibold py-3 rounded-lg hover:bg-red-700 transition mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Masuk
+                  {isLoading ? "Memproses..." : "Masuk"}
                 </button>
               </form>
 
-              {/* Register + Social Login */}
               <div className="text-center space-y-2 mt-6">
                 <p className="text-gray-600 text-sm">
                   Belum punya akun?{" "}
-                  <Link href="/register" className="text-primary-red font-semibold hover:underline">
+                  <Link
+                      href="/register"
+                      className="text-primary-red font-semibold hover:underline"
+                  >
                     Daftar disini
                   </Link>
                 </p>
@@ -117,15 +193,20 @@ export default function LoginPage() {
                 <p className="text-gray-600 text-sm">atau login dengan</p>
 
                 <div className="flex justify-center gap-4 pt-3">
-                  <a href="#" className="w-8 h-8 text-gray-400 hover:text-gray-600 flex items-center justify-center">
+                  <a
+                      href="#"
+                      className="w-8 h-8 text-gray-400 hover:text-gray-600 flex items-center justify-center"
+                  >
                     <RiFacebookFill className="w-6 h-6" />
                   </a>
-                  <a href="#" className="w-8 h-8 text-gray-400 hover:text-gray-600 flex items-center justify-center">
+                  <a
+                      href="#"
+                      className="w-8 h-8 text-gray-400 hover:text-gray-600 flex items-center justify-center"
+                  >
                     <RiGoogleFill className="w-6 h-6" />
                   </a>
                 </div>
               </div>
-
             </div>
           </div>
         </div>
