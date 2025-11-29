@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import pool from '@/lib/db';
-import { hashPassword, generateToken } from '@/lib/auth';
+import { hashPassword } from '@/lib/auth';
 import {RegisterRequest, AuthResponse, User} from '@/types/auth';
 import {RowDataPacket} from "mysql2";
 
@@ -80,9 +80,6 @@ export async function POST(request: NextRequest) {
           [userId, email, passwordHash, full_name, phone || null]
       );
 
-      // Generate JWT token
-      const token = generateToken(userId, email);
-
       // Get user data (tanpa password)
       const [rows] = await connection.query<RowDataPacket[]>(
           'SELECT id, email, full_name, phone, avatar_url, created_at, updated_at FROM users WHERE id = ?',
@@ -96,8 +93,7 @@ export async function POST(request: NextRequest) {
             success: true,
             message: 'Registrasi berhasil',
             data: {
-              user,
-              token
+              user
             }
           },
           { status: 201 }

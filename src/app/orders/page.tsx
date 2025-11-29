@@ -1,125 +1,235 @@
 "use client"
 
-import { useState } from "react"
-import { Navbar } from "@/components/navbar"
-import { FooterSection } from "@/components/footer-section"
-import { OrderCard } from "@/components/order-card"
-import { OrdersFilterSidebar } from "@/components/orders-filter-sidebar"
+import type React from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import {
+  RiFacebookFill,
+  RiLinkedinBoxFill,
+  RiUser3Fill,
+  RiMailFill,
+  RiLockFill,
+} from "@remixicon/react"
+import { useAuth } from "@/contexts/auth-context"
+import { authAPI } from "@/lib/api"
+import { Alert } from "@/components/Alert"
 
-// Mock data - ganti dengan data real dari API/database
-const MOCK_ORDERS = [
-  {
-    id: "1",
-    orderNumber: "#ORD-2024-001234",
-    date: new Date("2024-10-21"),
-    status: "delivered" as const,
-    items: [
-      { id: "1", name: "Sambal Ijo", quantity: 2, price: 35000 },
-      { id: "2", name: "Sambal Cumi", quantity: 1, price: 35000 },
-    ],
-    totalPrice: 105000,
-  },
-  {
-    id: "2",
-    orderNumber: "#ORD-2024-001233",
-    date: new Date("2024-10-20"),
-    status: "shipped" as const,
-    items: [{ id: "1", name: "Sambal Ikan Cakalang Suir", quantity: 1, price: 35000 }],
-    totalPrice: 35000,
-  },
-  {
-    id: "3",
-    orderNumber: "#ORD-2024-001232",
-    date: new Date("2024-10-19"),
-    status: "confirmed" as const,
-    items: [
-      { id: "1", name: "Sambal Ijo", quantity: 3, price: 35000 },
-      { id: "2", name: "Sambal Cumi", quantity: 2, price: 35000 },
-      { id: "3", name: "Sambal Ikan Cakalang Suir", quantity: 1, price: 35000 },
-    ],
-    totalPrice: 175000,
-  },
-  {
-    id: "4",
-    orderNumber: "#ORD-2024-001231",
-    date: new Date("2024-10-18"),
-    status: "pending" as const,
-    items: [{ id: "1", name: "Sambal Cumi", quantity: 1, price: 35000 }],
-    totalPrice: 35000,
-  },
-  {
-    id: "5",
-    orderNumber: "#ORD-2024-001230",
-    date: new Date("2024-10-17"),
-    status: "delivered" as const,
-    items: [
-      { id: "1", name: "Sambal Ijo", quantity: 1, price: 35000 },
-      { id: "2", name: "Sambal Ikan Cakalang Suir", quantity: 1, price: 35000 },
-    ],
-    totalPrice: 70000,
-  },
-]
+export default function RegisterPage() {
+  const router = useRouter()
+  const { login, isAuthenticated, isLoading: authLoading } = useAuth()
 
-export default function OrdersPage() {
-  const [filteredOrders, setFilteredOrders] = useState(MOCK_ORDERS)
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    full_name: "",
+    phone: "",
+  })
 
-  const handleFilterChange = (filters: { status?: string; sortBy?: string }) => {
-    let orders = [...MOCK_ORDERS]
+  const [isLoading, setIsLoading] = useState(false)
+  const [isRedirecting, setIsRedirecting] = useState(false)
 
-    // Filter by status
-    if (filters.status) {
-      orders = orders.filter((order) => order.status === filters.status)
+  const [alert, setAlert] = useState<{
+    show: boolean
+    type: "success" | "error"
+    message: string
+  } | null>(null)
+
+  // Redirect jika sudah login
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      router.replace("/")
     }
+  }, [isAuthenticated, authLoading, router])
 
-    // Sort
-    if (filters.sortBy === "newest") {
-      orders.sort((a, b) => b.date.getTime() - a.date.getTime())
-    } else if (filters.sortBy === "oldest") {
-      orders.sort((a, b) => a.date.getTime() - b.date.getTime())
-    } else if (filters.sortBy === "highest") {
-      orders.sort((a, b) => b.totalPrice - a.totalPrice)
-    } else if (filters.sortBy === "lowest") {
-      orders.sort((a, b) => a.totalPrice - b.totalPrice)
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    })
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setAlert(null)
+
+    try {
+      const response = await authAPI.register(formData)
+
+      if (response.success && response.data) {
+        login(response.data.user)
+
+        // aktifkan loading redirect
+        setIsRedirecting(true)
+
+        // smooth redirect seperti login
+        setTimeout(() => {
+          router.replace("/")
+        }, 1500)
+      } else {
+        setAlert({
+          show: true,
+          type: "error",
+          message: response.message || "Terjadi kesalahan saat registrasi",
+        })
+      }
+    } catch (error) {
+      setAlert({
+        show: true,
+        type: "error",
+        message:
+            error instanceof Error
+                ? error.message
+                : "Terjadi kesalahan saat registrasi",
+      })
+    } finally {
+      setIsLoading(false)
     }
+  }
 
-    setFilteredOrders(orders)
+  // Saat auth loading atau redirect, tampilkan spinner
+  if (authLoading || isRedirecting || isAuthenticated) {
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-red"></div>
+            <p className="mt-4 text-gray-600">Loading...</p>
+          </div>
+        </div>
+    )
   }
 
   return (
-      <main className="min-h-screen bg-gray-50">
-        <Navbar />
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="w-full max-w-4xl">
+          <div className="flex flex-col md:flex-row rounded-2xl overflow-hidden shadow-2xl">
 
-        <div className="max-w-6xl mx-auto px-4 py-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Pesanan Saya</h1>
-            <p className="text-gray-600">Lihat dan kelola semua pesanan Anda</p>
-          </div>
+            {/* Left Side */}
+            <div className="bg-primary-red text-white p-8 md:p-12 md:w-1/2 flex flex-col justify-center space-y-6">
+              <h1 className="text-5xl font-bold">Zambel</h1>
+              <p className="text-lg font-semibold opacity-90">Selamat Datang</p>
+              <p className="text-base opacity-80 leading-relaxed">
+                Kami hadir untuk menghadirkan sambal berkualitas tinggi, dibuat
+                dari bahan pilihan dengan cita rasa autentik Indonesia.
+              </p>
 
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Sidebar Filter */}
-            <div>
-              <OrdersFilterSidebar onFilterChange={handleFilterChange} />
+              <div className="flex gap-4 pt-4">
+                <a
+                    href="#"
+                    className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition"
+                >
+                  <RiLinkedinBoxFill className="w-5 h-5" />
+                </a>
+                <a
+                    href="#"
+                    className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition"
+                >
+                  <RiFacebookFill className="w-5 h-5" />
+                </a>
+              </div>
             </div>
 
-            {/* Orders Grid */}
-            <div className="lg:col-span-3">
-              {filteredOrders.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filteredOrders.map((order) => (
-                        <OrderCard key={order.id} {...order} />
-                    ))}
-                  </div>
-              ) : (
-                  <div className="bg-white rounded-lg p-8 text-center">
-                    <p className="text-gray-600 mb-2">Tidak ada pesanan yang sesuai</p>
-                    <p className="text-sm text-gray-500">Coba ubah filter atau mulai berbelanja</p>
-                  </div>
+            {/* Right Side */}
+            <div className="bg-white p-8 md:p-12 md:w-1/2 flex flex-col justify-center">
+              <h2 className="text-primary-red text-2xl font-bold mb-2">Daftar</h2>
+              <p className="text-gray-600 text-sm mb-8">Daftarkan akun anda</p>
+
+              {alert?.show && (
+                  <Alert
+                      type={alert.type}
+                      message={alert.message}
+                      onClose={() => setAlert(null)}
+                  />
               )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+
+                {/* Full Name */}
+                <div>
+                  <label className="block text-gray-700 text-sm font-medium mb-2">
+                    Nama Lengkap
+                  </label>
+                  <div className="flex items-center border border-gray-300 rounded-lg px-4 py-3">
+                    <RiUser3Fill className="w-5 h-5 text-gray-400" />
+                    <input
+                        type="text"
+                        name="full_name"
+                        value={formData.full_name}
+                        onChange={handleChange}
+                        className="flex-1 ml-3 outline-none bg-transparent"
+                        placeholder="Masukkan nama lengkap"
+                        required
+                        disabled={isLoading}
+                    />
+                  </div>
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="block text-gray-700 text-sm font-medium mb-2">
+                    Email
+                  </label>
+                  <div className="flex items-center border border-gray-300 rounded-lg px-4 py-3">
+                    <RiMailFill className="w-5 h-5 text-gray-400" />
+                    <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        className="flex-1 ml-3 outline-none bg-transparent"
+                        placeholder="Masukkan email"
+                        required
+                        disabled={isLoading}
+                    />
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-gray-700 text-sm font-medium mb-2">
+                    Password
+                  </label>
+                  <div className="flex items-center border border-gray-300 rounded-lg px-4 py-3">
+                    <RiLockFill className="w-5 h-5 text-gray-400" />
+                    <input
+                        type="password"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        className="flex-1 ml-3 outline-none bg-transparent"
+                        placeholder="Masukkan password"
+                        required
+                        minLength={6}
+                        disabled={isLoading}
+                    />
+                  </div>
+                </div>
+
+                <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full bg-primary-red text-white font-semibold py-3 rounded-lg hover:bg-red-700 transition mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? "Memproses..." : "Daftar"}
+                </button>
+              </form>
+
+              <div className="text-center mt-6">
+                <p className="text-gray-600 text-sm">
+                  Sudah punya akun?{" "}
+                  <Link
+                      href="/login"
+                      className="text-primary-red font-semibold hover:underline"
+                  >
+                    Masuk
+                  </Link>
+                </p>
+              </div>
             </div>
+
           </div>
         </div>
-
-        <FooterSection />
-      </main>
+      </div>
   )
 }

@@ -11,9 +11,10 @@ import {
   RiUser3Fill,
   RiLockFill,
 } from "@remixicon/react"
-import { useAuth } from "@/contexts/AuthContext"
+import { useAuth } from "@/contexts/auth-context"
 import { authAPI } from "@/lib/api"
 import { Alert } from "@/components/Alert"
+import { PublicOnlyRoute } from "@/components/public-only-route"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -52,7 +53,7 @@ export default function LoginPage() {
       const response = await authAPI.login(formData)
 
       if (response. success && response.data) {
-        login(response.data.token, response.data.user)
+        login(response.data.user)
         setTimeout(() => {
           router.replace("/")
         }, 1500)
@@ -90,6 +91,7 @@ export default function LoginPage() {
   }
 
   return (
+    <PublicOnlyRoute>
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-4xl">
           <div className="flex flex-col md:flex-row rounded-2xl overflow-hidden shadow-2xl">
@@ -211,5 +213,6 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+    </PublicOnlyRoute>
   )
 }

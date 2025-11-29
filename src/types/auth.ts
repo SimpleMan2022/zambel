@@ -26,7 +26,7 @@ export interface AuthResponse {
   message: string;
   data?: {
     user: Omit<User, 'password_hash'>;
-    token: string;
+    token?: string; // Make token optional
   };
   error?: string;
 }

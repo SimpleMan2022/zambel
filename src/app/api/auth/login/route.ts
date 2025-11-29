@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { comparePassword, generateToken } from '@/lib/auth';
+import { comparePassword, generateToken } from '@/lib/auth'; // Import generateToken from auth.ts
 import {LoginRequest, AuthResponse, User} from '@/types/auth';
 import {RowDataPacket} from "mysql2";
+import { cookies } from 'next/headers'; // Import cookies
 
 export async function POST(request: NextRequest) {
   try {
@@ -60,6 +61,15 @@ export async function POST(request: NextRequest) {
       // Generate JWT token
       const token = generateToken(user.id, user.email);
 
+      // Set JWT as httpOnly cookie
+      (await cookies()).set('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Use secure in production
+        sameSite: 'strict',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7, // 1 week
+      });
+
       // Hapus password dari response
       const { password_hash, ...userWithoutPassword } = user;
 
@@ -69,7 +79,6 @@ export async function POST(request: NextRequest) {
             message: 'Login berhasil',
             data: {
               user: userWithoutPassword,
-              token
             }
           },
           { status: 200 }

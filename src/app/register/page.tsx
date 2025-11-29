@@ -10,10 +10,12 @@ import {
   RiUser3Fill,
   RiMailFill,
   RiLockFill,
+  RiPhoneFill,
 } from "@remixicon/react"
-import { useAuth } from "@/contexts/AuthContext"
+import { useAuth } from "@/contexts/auth-context"
 import { authAPI } from "@/lib/api"
 import { Alert } from "@/components/Alert"
+import { PublicOnlyRoute } from "@/components/public-only-route"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -53,14 +55,14 @@ export default function RegisterPage() {
     try {
       const response = await authAPI.register(formData)
 
-      if (response.success && response. data) {
-        login(response.data.token, response.data.user)
+      if (response.success && response.data) {
+        login(response.data.user)
 
         // Tampilkan alert sukses
         setAlert({
           show: true,
           type: "success",
-          message: `Registrasi berhasil! Selamat datang, ${response. data.user.full_name}`,
+          message: `Registrasi berhasil! Selamat datang, ${response.data.user.full_name}`,
         })
 
         // Redirect setelah 2 detik
@@ -82,7 +84,7 @@ export default function RegisterPage() {
         type: "error",
         message:
             error instanceof Error
-                ? error. message
+                ? error.message
                 : "Terjadi kesalahan saat registrasi",
       })
     } finally {
@@ -100,6 +102,7 @@ export default function RegisterPage() {
   }
 
   return (
+    <PublicOnlyRoute>
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-4xl">
           <div className="flex flex-col md:flex-row rounded-2xl overflow-hidden shadow-2xl">
@@ -144,20 +147,20 @@ export default function RegisterPage() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Username */}
+                {/* Full Name */}
                 <div>
                   <label className="block text-gray-700 text-sm font-medium mb-2">
-                    Username
+                    Nama Lengkap
                   </label>
                   <div className="flex items-center border border-gray-300 rounded-lg px-4 py-3">
                     <RiUser3Fill className="w-5 h-5 text-gray-400" />
                     <input
                         type="text"
-                        name="username"
-                        value={formData.email}
+                        name="full_name"
+                        value={formData.full_name}
                         onChange={handleChange}
                         className="flex-1 ml-3 outline-none bg-transparent"
-                        placeholder="Masukkan username"
+                        placeholder="Masukkan nama lengkap"
                         required
                         disabled={isLoading}
                     />
@@ -174,10 +177,30 @@ export default function RegisterPage() {
                     <input
                         type="email"
                         name="email"
-                        value={formData. email}
+                        value={formData.email}
                         onChange={handleChange}
                         className="flex-1 ml-3 outline-none bg-transparent"
                         placeholder="Masukkan email"
+                        required
+                        disabled={isLoading}
+                    />
+                  </div>
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <label className="block text-gray-700 text-sm font-medium mb-2">
+                    Nomor Telepon
+                  </label>
+                  <div className="flex items-center border border-gray-300 rounded-lg px-4 py-3">
+                    <RiPhoneFill className="w-5 h-5 text-gray-400" />
+                    <input
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        className="flex-1 ml-3 outline-none bg-transparent"
+                        placeholder="Masukkan nomor telepon"
                         required
                         disabled={isLoading}
                     />
@@ -231,5 +254,6 @@ export default function RegisterPage() {
           </div>
         </div>
       </div>
+    </PublicOnlyRoute>
   )
 }

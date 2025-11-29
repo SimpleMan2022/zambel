@@ -1,12 +1,12 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env. JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET; // Removed default value
 
 export interface JwtPayload {
   id: string;
   email: string;
-  role: string;
+  role?: string; // Made role optional as it's not always present in generateToken
   iat?: number;
   exp?: number;
 }
@@ -23,18 +23,30 @@ export const comparePassword = async (
   return bcrypt.compare(password, hashedPassword);
 };
 
-export const generateToken = (userId: string, email: string): string => {
+export const generateToken = (id: string, email: string, role?: string): string => {
+  if (!JWT_SECRET) {
+    throw new Error("JWT_SECRET is not defined in environment variables.");
+  }
+  const payload: { id: string; email: string; role?: string } = { id, email };
+  if (role) {
+    payload.role = role;
+  }
   return jwt.sign(
-      { userId, email },
+      payload,
       JWT_SECRET,
       { expiresIn: '7d' }
   );
 };
 
 export const verifyToken = (token: string): JwtPayload |null => {
+  if (!JWT_SECRET) {
+    console.error("JWT_SECRET is not defined in environment variables.");
+    return null;
+  }
   try {
     return jwt.verify(token, JWT_SECRET) as JwtPayload;
   } catch (error) {
+    console.error("Error verifying JWT token:", error);
     return null;
   }
 };

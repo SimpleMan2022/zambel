@@ -1,6 +1,6 @@
 import type { LoginRequest, RegisterRequest, AuthResponse } from "@/types/auth"
 
-const API_BASE_URL = process.env. NEXT_PUBLIC_API_URL || "/api"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ""
 
 async function fetchAPI<T>(
     endpoint: string,

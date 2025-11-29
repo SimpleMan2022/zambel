@@ -1,62 +1,33 @@
 "use client"
 
-import { RiStarFill, RiUser3Fill } from "@remixicon/react"
+import {
+  RiStarFill,
+  RiUser3Fill,
+  RiStarHalfFill,
+  RiStarLine
+} from "@remixicon/react"
+import Image from "next/image";
 
-const reviews = [
-  {
-    id: 1,
-    name: "Pelanggan Setia",
-    rating: 5,
-    text: "Sambel Zambel terbaik! Kualitas premium dengan harga yang terjangkau. Sangat merekomendasikan untuk dibeli dan dicoba.",
-  },
-  {
-    id: 2,
-    name: "Penggemar Sambel",
-    rating: 5,
-    text: "Rasa yang konsisten dan lezat setiap kalinya. Kemasan rapi dan pengiriman cepat. Top notch!",
-  },
-  {
-    id: 3,
-    name: "Pembeli Berulang",
-    rating: 5,
-    text: "Sudah berkali-kali membeli dan selalu puas. Bahan alami, tidak berasa pengawet. Recommended!",
-  },
-  {
-    id: 4,
-    name: "Ibu Rumah Tangga",
-    rating: 5,
-    text: "Anak-anak suka banget dengan sambel ini. Pedasnya pas dan tidak terlalu tajam. Cocok untuk keluarga.",
-  },
-  {
-    id: 5,
-    name: "Perantau",
-    rating: 5,
-    text: "Mengingatkan saya pada sambel buatan ibu. Rasa authentik dan bikin kangen rumah!",
-  },
-  {
-    id: 6,
-    name: "Food Blogger",
-    rating: 5,
-    text: "Sambel dengan cita rasa yang unik. Bumbu terasa fresh dan balance. Worth every penny!",
-  },
-  {
-    id: 7,
-    name: "Karyawan Kantoran",
-    rating: 5,
-    text: "Perfect untuk teman makan siang di kantor. Praktis dan rasanya bikin nagih terus!",
-  },
-  {
-    id: 8,
-    name: "Mahasiswa",
-    rating: 5,
-    text: "Harga affordable untuk mahasiswa tapi rasa seperti sambel premium. The best!",
-  },
-]
+interface Review {
+  id: string;
+  rating: number;
+  title?: string;
+  comment: string;
+  createdAt: string;
+  userName: string;
+  avatarUrl?: string;
+  productName: string;
+}
 
-// Duplicate reviews untuk infinite scroll effect yang lebih smooth
-const duplicatedReviews = [...reviews, ...reviews, ...reviews, ...reviews]
+interface ReviewsSectionProps {
+  reviews: Review[];
+}
 
-export default function ReviewsSection() {
+export default function ReviewsSection({ reviews }: ReviewsSectionProps) {
+
+  // Duplicate reviews untuk infinite scroll effect yang lebih smooth
+  const duplicatedReviews = [...reviews, ...reviews, ...reviews, ...reviews];
+
   return (
       <section className="bg-gray-50 py-20 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-12">
@@ -79,22 +50,37 @@ export default function ReviewsSection() {
                     className="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition flex-shrink-0 w-80"
                 >
                   <div className="flex gap-1 mb-4">
-                    {[...Array(review.rating)].map((_, i) => (
-                        <RiStarFill key={i} className="w-5 h-5 text-yellow-400"/>
-                    ))}
+                    {[...Array(5)].map((_, i) => {
+                      const starValue = review.rating || 0;
+                      return (
+                        <span key={i}>
+                          {starValue >= i + 1 ? (
+                            <RiStarFill className="w-5 h-5 text-yellow-400"/>
+                          ) : starValue >= i + 0.5 ? (
+                            <RiStarHalfFill className="w-5 h-5 text-yellow-400"/>
+                          ) : (
+                            <RiStarLine className="w-5 h-5 text-gray-300"/>
+                          )}
+                        </span>
+                      );
+                    })}
                   </div>
 
                   <p className="text-gray-700 mb-6 leading-relaxed line-clamp-3">
-                    {review.text}
+                    {review.comment}
                   </p>
 
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0">
-                      <RiUser3Fill className="w-6 h-6 text-white"/>
+                    <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0 relative overflow-hidden">
+                      {review.avatarUrl ? (
+                          <Image src={review.avatarUrl} alt={review.userName} layout="fill" objectFit="cover" />
+                      ) : (
+                          <RiUser3Fill className="w-6 h-6 text-white"/>
+                      )}
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900">
-                        {review.name}
+                        {review.userName}
                       </h3>
                       <p className="text-sm text-gray-500">
                         Pembeli Terverifikasi
@@ -115,22 +101,37 @@ export default function ReviewsSection() {
                     className="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition flex-shrink-0 w-80"
                 >
                   <div className="flex gap-1 mb-4">
-                    {[...Array(review.rating)].map((_, i) => (
-                        <RiStarFill key={i} className="w-5 h-5 text-yellow-400"/>
-                    ))}
+                    {[...Array(5)].map((_, i) => {
+                      const starValue = review.rating || 0;
+                      return (
+                        <span key={i}>
+                          {starValue >= i + 1 ? (
+                            <RiStarFill key={i} className="w-5 h-5 text-yellow-400"/>
+                          ) : starValue >= i + 0.5 ? (
+                            <RiStarHalfFill key={i} className="w-5 h-5 text-yellow-400"/>
+                          ) : (
+                            <RiStarLine key={i} className="w-5 h-5 text-gray-300"/>
+                          )}
+                        </span>
+                      );
+                    })}
                   </div>
 
                   <p className="text-gray-700 mb-6 leading-relaxed line-clamp-3">
-                    {review.text}
+                    {review.comment}
                   </p>
 
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0">
-                      <RiUser3Fill className="w-6 h-6 text-white"/>
+                    <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0 relative overflow-hidden">
+                      {review.avatarUrl ? (
+                          <Image src={review.avatarUrl} alt={review.userName} layout="fill" objectFit="cover" />
+                      ) : (
+                          <RiUser3Fill className="w-6 h-6 text-white"/>
+                      )}
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900">
-                        {review.name}
+                        {review.userName}
                       </h3>
                       <p className="text-sm text-gray-500">
                         Pembeli Terverifikasi
