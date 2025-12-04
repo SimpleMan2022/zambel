@@ -100,7 +100,7 @@ export default function LoginPage() {
               <h1 className="text-5xl font-bold">Zambel</h1>
               <p className="text-lg font-semibold opacity-90">Selamat Datang</p>
               <p className="text-base opacity-80 leading-relaxed">
-                Kami hadir untuk menghadirkan sambal berkualitas tinggi, dibuat
+                Kami hadirs untuk menghadirkan sambal berkualitas tinggi, dibuat
                 dari bahan pilihan dengan cita rasa autentik Indonesia.
               </p>
 

@@ -1,62 +1,78 @@
-"use client"
+"use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react"
-import type { User } from "@/types/auth"
-import { useRouter } from 'next/navigation'; // Import useRouter
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import type { User } from "@/types/auth";
+import { useRouter } from "next/navigation";
 
-type SafeUser = Omit<User, "password_hash">
+type SafeUser = Omit<User, "password_hash">;
 
 interface AuthContextType {
   user: SafeUser | null;
   token: string | null;
-  login: (user: SafeUser) => void;
+  login: (user: SafeUser, token?: string) => void;
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
-  cartItemCount: number; // Add cart item count
-  updateCartItemCount: (count: number) => void; // Add function to update cart count
+  cartItemCount: number;
+  updateCartItemCount: (count: number) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Helper untuk membaca cookie
+function getTokenFromCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/token=([^;]+)/);
+  return match ? match[1] : null;
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SafeUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [cartItemCount, setCartItemCount] = useState(0); 
-  const isAuthenticated = !!token;
-  const router = useRouter(); // Initialize useRouter
+  const [cartItemCount, setCartItemCount] = useState(0);
+  const router = useRouter();
 
+  const isAuthenticated = !!token;
+
+  // Fetch jumlah item cart
   const fetchCartCount = useCallback(async () => {
     if (!isAuthenticated) return;
+
     try {
-      const response = await fetch('/api/cart/count');
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setCartItemCount(result.data.count);
-        }
+      const res = await fetch("/api/cart/count", {
+        credentials: "include", // penting!!!
+      });
+      if (!res.ok) return;
+
+      const result = await res.json();
+      if (result.success) {
+        setCartItemCount(result.data.count);
       }
-    } catch (error) {
-      console.error("Failed to fetch cart count:", error);
+    } catch (err) {
+      console.error("Failed to fetch cart count:", err);
     }
   }, [isAuthenticated]);
 
+  // Fetch user profile dengan cookie
   const fetchUserProfile = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/auth/profile');
-      const result = await response.json();
+      const res = await fetch("/api/auth/profile", {
+        credentials: "include", // WAJIB agar cookie terkirim
+      });
 
-      if (response.ok && result.success) {
-        setUser(result.data);
-        setToken('exists');
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setUser(data.data);
+        setToken("session"); // token valid, karena cookie ada & diterima
       } else {
         setUser(null);
         setToken(null);
       }
-    } catch (error) {
-      console.error("Failed to fetch user profile:", error);
+    } catch (err) {
+      console.error("Failed to fetch profile:", err);
       setUser(null);
       setToken(null);
     } finally {
@@ -64,39 +80,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Saat mount: baca cookie dulu, lalu fetch profile
   useEffect(() => {
+    const cookieToken = getTokenFromCookie();
+    if (cookieToken) setToken("session"); // cookie valid → session active
     fetchUserProfile();
   }, [fetchUserProfile]);
 
-  // Fetch cart count when authentication status changes
+  // Fetch cart count setelah auth selesai
   useEffect(() => {
-    if (!isLoading) { // Only fetch if authLoading is done
+    if (!isLoading) {
       fetchCartCount();
     }
   }, [isLoading, fetchCartCount]);
 
   const login = (newUser: SafeUser) => {
     setUser(newUser);
-    setToken('exists');
-    fetchCartCount(); // Fetch cart count after login
+    setToken("session"); // token diverifikasi oleh server
+    fetchCartCount();
   };
 
   const logout = async () => {
     try {
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST',
+      const res = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include", // hapus cookie di server
       });
 
-      if (response.ok) {
-        setToken(null);
+      if (res.ok) {
         setUser(null);
-        setCartItemCount(0); // Reset cart count on logout
-        router.push('/'); // Redirect to home page using router.push
-      } else {
-        console.error("Logout failed on server.");
+        setToken(null);
+        setCartItemCount(0);
+        router.push("/");
       }
-    } catch (error) {
-      console.error("Error during logout API call:", error);
+    } catch (err) {
+      console.error("Logout error:", err);
     }
   };
 
@@ -111,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         token,
         login,
         logout,
-        isAuthenticated: !!token,
+        isAuthenticated,
         isLoading,
         cartItemCount,
         updateCartItemCount,
@@ -123,9 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  return ctx;
 }
