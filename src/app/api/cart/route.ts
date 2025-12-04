@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT
-        c.product_id as id, p.name, p.price, p.image_url, c.quantity
+        c.product_id as id, p.name, p.price, p.image_url, c.quantity, p.stock
        FROM cart_items c
        JOIN products p ON c.product_id = p.id
        WHERE c.user_id = ?
@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
       price: row.price,
       imageUrl: row.image_url,
       quantity: row.quantity,
+      stock: row.stock,
     }));
 
     return apiResponse(cartItems);
@@ -61,16 +62,48 @@ export async function POST(request: NextRequest) {
     );
 
     if (existingItem.length > 0) {
-      // Tambah quantity (bukan overwrite)
+      // Dapatkan stok produk
+      const [productRows] = await pool.query<RowDataPacket[]>(
+        `SELECT stock FROM products WHERE id = ?`,
+        [product_id]
+      );
+
+      if (productRows.length === 0) {
+        return apiError("Product not found", 404);
+      }
+
+      const productStock = productRows[0].stock;
+
+      if (quantity > productStock) {
+        return apiError(`Cannot add more than ${productStock} items.`, 400);
+      }
+
+      // Update quantity (overwrite dengan quantity baru)
       await pool.query(
         `UPDATE cart_items 
-         SET quantity = quantity + ?, updated_at = NOW() 
+         SET quantity = ?, updated_at = NOW() 
          WHERE user_id = ? AND product_id = ?`,
         [quantity, userId, product_id]
       );
 
       return apiResponse({ message: "Cart item quantity updated" }, { status: 200 });
     } else {
+      // Dapatkan stok produk untuk item baru
+      const [productRows] = await pool.query<RowDataPacket[]>(
+        `SELECT stock FROM products WHERE id = ?`,
+        [product_id]
+      );
+
+      if (productRows.length === 0) {
+        return apiError("Product not found", 404);
+      }
+
+      const productStock = productRows[0].stock;
+
+      if (quantity > productStock) {
+        return apiError(`Cannot add more than ${productStock} items.`, 400);
+      }
+
       // Insert baru
       await pool.query(
         `INSERT INTO cart_items 
