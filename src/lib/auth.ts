@@ -24,9 +24,7 @@ export const comparePassword = async (
 };
 
 export const generateToken = (id: string, email: string, role?: string): string => {
-  console.log("[AUTH_LIB] Mencoba membuat token JWT.");
   if (!JWT_SECRET) {
-    console.error("[AUTH_LIB] Error: JWT_SECRET tidak didefinisikan di environment variables saat membuat token.");
     throw new Error("JWT_SECRET is not defined in environment variables.");
   }
   const payload: { id: string; email: string; role?: string } = { id, email };
@@ -38,22 +36,18 @@ export const generateToken = (id: string, email: string, role?: string): string 
       JWT_SECRET,
       { expiresIn: '7d' }
   );
-  console.log("[AUTH_LIB] Token JWT berhasil dibuat.");
   return token;
 };
 
 export const verifyToken = (token: string): JwtPayload |null => {
-  console.log("[AUTH_LIB] Mencoba memverifikasi token JWT.");
   if (!JWT_SECRET) {
-    console.error("[AUTH_LIB] Error: JWT_SECRET tidak didefinisikan di environment variables saat memverifikasi token.");
+    console.error("JWT_SECRET is not defined in environment variables.");
     return null;
   }
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
-    console.log("[AUTH_LIB] Token JWT berhasil diverifikasi.", decoded);
-    return decoded;
+    return jwt.verify(token, JWT_SECRET) as JwtPayload;
   } catch (error) {
-    console.error("[AUTH_LIB] Error memverifikasi JWT token:", error);
+    console.error("Error verifying JWT token:", error);
     return null;
   }
 };

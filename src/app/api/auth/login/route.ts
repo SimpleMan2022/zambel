@@ -7,13 +7,11 @@ import { supabase } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("[LOGIN_ROUTE] Menerima permintaan login.");
     const body: LoginRequest = await request.json();
     const { email, password } = body;
 
     // Validasi input
     if (!email || !password) {
-      console.log("[LOGIN_ROUTE] Validasi gagal: Email atau password tidak ada.");
       return NextResponse.json<AuthResponse>(
           {
             success: false,
@@ -23,13 +21,11 @@ export async function POST(request: NextRequest) {
           { status: 400 }
       );
     }
-    console.log(`[LOGIN_ROUTE] Mencoba login dengan email: ${email}`);
 
     // Cari user berdasarkan email
     const { data: user, error } = await supabase.from('users').select('*').eq('email', email).single();
 
     if (error || !user) {
-      console.log("[LOGIN_ROUTE] User tidak ditemukan atau error database.", error);
       return NextResponse.json<AuthResponse>(
             {
               success: false,
@@ -39,13 +35,11 @@ export async function POST(request: NextRequest) {
             { status: 401 }
         );
     }
-    console.log("[LOGIN_ROUTE] User ditemukan.");
 
     // Verifikasi password
     const isPasswordValid = await comparePassword(password, user.password_hash);
 
     if (!isPasswordValid) {
-      console.log("[LOGIN_ROUTE] Password tidak valid.");
       return NextResponse.json<AuthResponse>(
             {
               success: false,
@@ -55,11 +49,23 @@ export async function POST(request: NextRequest) {
             { status: 401 }
         );
     }
-    console.log("[LOGIN_ROUTE] Password valid. Membuat token...");
 
     // Generate JWT token
     const token = generateToken(user.id, user.email);
-    console.log("[LOGIN_ROUTE] Token berhasil dibuat. Mengatur cookie...");
+
+    // Dapatkan domain untuk cookie
+    const vercelUrl = process.env.VERCEL_URL; // e.g., your-app.vercel.app or localhost:3000
+    let cookieDomain: string | undefined = undefined;
+
+    if (vercelUrl) {
+      // Hapus protokol (http://, https://) dan path jika ada
+      const url = new URL(vercelUrl.startsWith("http") ? vercelUrl : `https://${vercelUrl}`);
+      cookieDomain = url.hostname;
+      // Untuk lingkungan lokal, gunakan undefined agar browser mengaturnya secara otomatis
+      if (cookieDomain.includes("localhost") || cookieDomain.includes("127.0.0.1")) {
+        cookieDomain = undefined;
+      }
+    }
 
     // Set JWT as httpOnly cookie
     (await cookies()).set('token', token, {
@@ -68,8 +74,8 @@ export async function POST(request: NextRequest) {
         sameSite: "lax",
         path: "/",
         maxAge: 60 * 60 * 24 * 7, // 1 week
+        ...(cookieDomain && { domain: cookieDomain }),
       });
-    console.log("[LOGIN_ROUTE] Cookie token telah diatur. Login berhasil.");
 
     // Hapus password dari response
     const { password_hash, ...userWithoutPassword } = user;
@@ -85,7 +91,7 @@ export async function POST(request: NextRequest) {
           { status: 200 }
       );
   } catch (error) {
-    console.error('[LOGIN_ROUTE] Login error global:', error);
+    console.error('Login error:', error);
     return NextResponse.json<AuthResponse>(
         {
           success: false,
