@@ -69,8 +69,6 @@ export async function POST(request: NextRequest) {
       data: { user: { ...user, password_hash: undefined } },
     });
 
-    console.log("response", response);
-
     response.cookies.set({
       name: "token",
       value: token,
@@ -84,18 +82,7 @@ export async function POST(request: NextRequest) {
     console.log("[LOGIN_ROUTE] Cookie token telah diatur. Login berhasil.");
 
     // Hapus password dari response
-    const { password_hash, ...userWithoutPassword } = user;
-
-    return NextResponse.json<AuthResponse>(
-          {
-            success: true,
-            message: 'Login berhasil',
-            data: {
-              user: userWithoutPassword,
-            }
-          },
-          { status: 200 }
-      );
+   return response
   } catch (error) {
     console.error('[LOGIN_ROUTE] Login error global:', error);
     return NextResponse.json<AuthResponse>(
