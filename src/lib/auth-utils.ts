@@ -51,11 +51,11 @@ export const apiClient = {
   async request(url: string, options: RequestInit = {}) {
     const headers = new Headers(options.headers);
     headers.set("Content-Type", "application/json");
-
+    console.log("url", url);  
     const response = await fetch(url, {
       ...options,
       headers,
-      credentials: "include", // ← FIX WAJIB
+      credentials: "include", 
     });
 
     if (response.status === 401) {
