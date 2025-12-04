@@ -76,7 +76,7 @@ export default function Home() {
         const reviewsData = await reviewsRes.json();
 
         if (featuredData.success) {
-          setFeaturedProducts(featuredData.data);
+          setFeaturedProducts(featuredData.data.slice(0, 6));
         } else {
           setError(featuredData.message);
         }

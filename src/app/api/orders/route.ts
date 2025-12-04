@@ -1,8 +1,7 @@
 import { NextRequest } from 'next/server';
 import { apiResponse, apiError } from '@/lib/api-response';
-import pool from '@/lib/db';
 import { getUserIdFromRequest } from '@/lib/auth-utils';
-import { RowDataPacket } from 'mysql2';
+import { supabase } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,8 +13,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const statusFilter = searchParams.get('status');
 
-    let query = `
-      SELECT 
+    let query = supabase
+      .from('orders')
+      .select(
+        `
           id,
           order_number,
           status,
@@ -28,22 +29,20 @@ export async function GET(request: NextRequest) {
           tracking_number,
           estimated_delivery_date,
           created_at
-        FROM orders
-        WHERE user_id = ?
-    `;
-    const queryParams: (string | number)[] = [userId];
+        `
+      )
+      .eq('user_id', userId);
 
     if (statusFilter && statusFilter !== 'all') {
-      query += ` AND status = ?`;
-      queryParams.push(statusFilter);
+      query = query.eq('status', statusFilter);
     }
 
-    query += ` ORDER BY created_at DESC`;
+    const { data: ordersRows, error } = await query.order('created_at', { ascending: false });
 
-    const [ordersRows] = await pool.query<RowDataPacket[]>(
-      query,
-      queryParams
-    );
+    if (error) {
+      console.error("Error fetching user orders:", error);
+      return apiError("Failed to fetch orders", 500);
+    }
 
     return apiResponse(ordersRows);
 

@@ -1,20 +1,17 @@
 import { apiResponse, apiError } from "@/lib/api-response";
-import pool from "@/lib/db";
-import { RowDataPacket } from "mysql2";
+import { supabase } from '@/lib/supabase';
 
 export async function GET() {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT id, name, slug, image_url FROM categories ORDER BY name ASC`
-    );
+    const { data: categories, error } = await supabase
+      .from("categories")
+      .select("id, name, slug, image_url")
+      .order("name", { ascending: true });
 
-    // You might need to adjust the mapping if your database column names differ from your Category interface
-    const categories = rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      slug: row.slug,
-      image_url: row.image_url,
-    }));
+    if (error) {
+      console.error("Error fetching categories:", error);
+      return apiError("Failed to fetch categories", 500);
+    }
 
     return apiResponse(categories);
   } catch (error) {

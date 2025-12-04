@@ -1,7 +1,6 @@
 "use client"
 
 import { MainLayout } from "@/components/main-layout"
-import Image from "next/image"
 import { RiLeafLine, RiSparkling2Line, RiHeartFill, RiHandHeartLine } from "@remixicon/react"
 import Link from "next/link"
 
@@ -11,13 +10,7 @@ export default function TentangKamiPage() {
       <div className="min-h-screen bg-gray-50">
         {/* Hero Section */}
         <section className="relative bg-gradient-to-r from-red-800 to-gray-900 text-white py-20 md:py-32 overflow-hidden">
-          <Image 
-            src="/images/about-hero.jpg" 
-            alt="Tentang Kami Hero"
-            fill 
-            style={{ objectFit: 'cover', opacity: 0.2 }}
-            className="absolute inset-0 z-0"
-          />
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-red-800 to-gray-900 opacity-20"></div>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
             <h1 className="text-5xl md:text-7xl font-extrabold mb-4 animate-fade-in-up">
               Cerita di Balik Kelezatan Zambel
@@ -42,14 +35,7 @@ export default function TentangKamiPage() {
                 </p>
               </div>
               <div className="animate-fade-in-right">
-                <Image 
-                  src="/images/about-mission.jpg" 
-                  alt="Mission"
-                  width={600} 
-                  height={400} 
-                  className="rounded-lg shadow-xl"
-                  style={{ objectFit: 'cover' }}
-                />
+                <div className="w-full h-96 bg-gradient-to-r from-red-800 to-gray-900 rounded-lg shadow-xl"></div>
               </div>
             </div>
 
@@ -64,14 +50,7 @@ export default function TentangKamiPage() {
                 </p>
               </div>
               <div className="md:order-1 animate-fade-in-left">
-                <Image 
-                  src="/images/about-vision.jpg" 
-                  alt="Vision"
-                  width={600} 
-                  height={400} 
-                  className="rounded-lg shadow-xl"
-                  style={{ objectFit: 'cover' }}
-                />
+                <div className="w-full h-96 bg-gradient-to-r from-red-800 to-gray-900 rounded-lg shadow-xl"></div>
               </div>
             </div>
           </div>

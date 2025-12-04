@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
 import { apiResponse, apiError } from '@/lib/api-response';
-import pool from '@/lib/db';
 import crypto from 'crypto';
+import { supabase } from '@/lib/supabase';
+import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,46 +49,42 @@ export async function POST(request: NextRequest) {
     }
 
     // --- UPDATE ORDERS TABLE ---
-    await pool.query(
-        `UPDATE orders 
-         SET 
-           status = ?, 
-           payment_status = ?, 
-           midtrans_transaction_id = ?, 
-           midtrans_status_code = ?, 
-           midtrans_payment_type = ?
-         WHERE order_number = ?`,
-        [
-          orderStatus,
-          paymentStatus,
-          notification.transaction_id,
-          notification.status_code,
-          notification.payment_type,
-          orderNumber,
-        ]
-      );
+    const { data: updatedOrder, error: updateOrderError } = await supabase
+      .from("orders")
+      .update({
+        status: orderStatus,
+        payment_status: paymentStatus,
+        midtrans_transaction_id: notification.transaction_id,
+        midtrans_status_code: notification.status_code,
+        midtrans_payment_type: notification.payment_type,
+      })
+      .eq("order_number", orderNumber)
+      .select("id, user_id, total")
+      .single();
+
+    if (updateOrderError || !updatedOrder) {
+      console.error("Error updating order:", updateOrderError);
+      return apiError("Failed to update order status", 500);
+    }
 
     // --- OPTIONAL: SAVE TO PAYMENTS TABLE ---
-    await pool.query(
-      `INSERT INTO payments (
-          id, order_id, user_id, 
-          midtrans_transaction_id, midtrans_order_id, 
-          amount, payment_method, status,
-          created_at, updated_at
-       )
-       SELECT UUID(), o.id, o.user_id,
-              ?, ?, o.total, ?, ?,
-              CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-       FROM orders o
-       WHERE o.order_number = ?`,
-      [
-        notification.transaction_id,
-        orderNumber,
-        notification.payment_type,
-        paymentStatus,
-        orderNumber,
-      ]
-    );
+    const { error: insertPaymentError } = await supabase
+      .from("payments")
+      .insert({
+        id: uuidv4(),
+        order_id: updatedOrder.id,
+        user_id: updatedOrder.user_id,
+        midtrans_transaction_id: notification.transaction_id,
+        midtrans_order_id: orderNumber,
+        amount: updatedOrder.total,
+        payment_method: notification.payment_type,
+        status: paymentStatus,
+      });
+
+    if (insertPaymentError) {
+      console.error("Error inserting payment:", insertPaymentError);
+      // Log the error but don't necessarily fail the webhook, as order update is more critical
+    }
 
     return apiResponse({ message: "Webhook processed successfully" });
 

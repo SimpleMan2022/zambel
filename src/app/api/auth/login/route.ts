@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { comparePassword, generateToken } from '@/lib/auth'; // Import generateToken from auth.ts
 import {LoginRequest, AuthResponse, User} from '@/types/auth';
 import {RowDataPacket} from "mysql2";
 import { cookies } from 'next/headers'; // Import cookies
+import { supabase } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,17 +22,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const connection = await pool.getConnection();
+    // Cari user berdasarkan email
+    const { data: user, error } = await supabase.from('users').select('*').eq('email', email).single();
 
-    try {
-      // Cari user berdasarkan email
-      const [rows] = await connection.query<RowDataPacket[]>(
-          'SELECT * FROM users WHERE email = ?',
-          [email]
-      );
-
-      if (!rows.length) {
-        return NextResponse.json<AuthResponse>(
+    if (error || !user) {
+      return NextResponse.json<AuthResponse>(
             {
               success: false,
               message: 'Email atau password salah',
@@ -40,15 +34,13 @@ export async function POST(request: NextRequest) {
             },
             { status: 401 }
         );
-      }
+    }
 
-      const user = rows[0] as User;
+    // Verifikasi password
+    const isPasswordValid = await comparePassword(password, user.password_hash);
 
-      // Verifikasi password
-      const isPasswordValid = await comparePassword(password, user.password_hash);
-
-      if (!isPasswordValid) {
-        return NextResponse.json<AuthResponse>(
+    if (!isPasswordValid) {
+      return NextResponse.json<AuthResponse>(
             {
               success: false,
               message: 'Email atau password salah',
@@ -56,13 +48,13 @@ export async function POST(request: NextRequest) {
             },
             { status: 401 }
         );
-      }
+    }
 
-      // Generate JWT token
-      const token = generateToken(user.id, user.email);
+    // Generate JWT token
+    const token = generateToken(user.id, user.email);
 
-      // Set JWT as httpOnly cookie
-      (await cookies()).set('token', token, {
+    // Set JWT as httpOnly cookie
+    (await cookies()).set('token', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production', // Use secure in production
         sameSite: 'strict',
@@ -70,10 +62,10 @@ export async function POST(request: NextRequest) {
         maxAge: 60 * 60 * 24 * 7, // 1 week
       });
 
-      // Hapus password dari response
-      const { password_hash, ...userWithoutPassword } = user;
+    // Hapus password dari response
+    const { password_hash, ...userWithoutPassword } = user;
 
-      return NextResponse.json<AuthResponse>(
+    return NextResponse.json<AuthResponse>(
           {
             success: true,
             message: 'Login berhasil',
@@ -83,9 +75,6 @@ export async function POST(request: NextRequest) {
           },
           { status: 200 }
       );
-    } finally {
-      connection.release();
-    }
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json<AuthResponse>(

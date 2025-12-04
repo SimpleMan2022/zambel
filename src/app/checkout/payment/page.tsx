@@ -11,6 +11,7 @@ import { RiLoader4Line } from '@remixicon/react';
 
 interface CartItem {
   id: string;
+  productId: string;
   name: string;
   price: number;
   imageUrl: string;
@@ -127,7 +128,7 @@ export default function CheckoutPaymentPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          cartItems: cartItems.map(item => ({ product_id: item.id, quantity: item.quantity })),
+          cartItems: cartItems.map(item => ({ product_id: item.productId, quantity: item.quantity })),
           shippingAddress,
           selectedShippingMethod,
         }),

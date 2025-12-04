@@ -1,22 +1,18 @@
 import { apiResponse, apiError } from "@/lib/api-response";
-import pool from "@/lib/db";
-import { RowDataPacket } from "mysql2";
+import { supabase } from '@/lib/supabase';
 
 export async function GET() {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT id, name, price, image_url, rating, review_count, description FROM products WHERE is_active = TRUE ORDER BY created_at DESC`
-    );
+    const { data: products, error } = await supabase
+      .from("products")
+      .select("id, name, price, image_url, rating, review_count, description")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
 
-    const products = rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      price: row.price,
-      image_url: row.image_url,
-      rating: row.rating,
-      review_count: row.review_count,
-      description: row.description,
-    }));
+    if (error) {
+      console.error("Error fetching all products:", error);
+      return apiError("Failed to fetch products", 500);
+    }
 
     return apiResponse(products);
   } catch (error) {

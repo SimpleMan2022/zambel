@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { apiResponse, apiError } from '@/lib/api-response';
-import pool from '@/lib/db';
 import { getUserIdFromRequest } from '@/lib/auth-utils';
 import { v4 as uuidv4 } from 'uuid';
-import type { RowDataPacket } from 'mysql2';
-import { Buffer } from 'buffer'; // Import Buffer
+import { supabase } from '@/lib/supabase';
 
 interface CartItem {
   product_id: string;
@@ -64,10 +62,16 @@ export async function POST(request: NextRequest) {
 
     // 1. Validate cart items and fetch product details
     const productIds = cartItems.map(item => item.product_id);
-    const [productsRows] = await pool.query<RowDataPacket[]>
-      (`SELECT id, name, price, stock, image_url FROM products WHERE id IN (?) AND is_active = TRUE`,
-        [productIds]
-      );
+    const { data: productsRows, error: productsError } = await supabase
+      .from("products")
+      .select("id, name, price, stock, image_url")
+      .in("id", productIds)
+      .eq("is_active", true);
+
+    if (productsError) {
+      console.error("Error fetching products:", productsError);
+      return apiError("Failed to fetch product details", 500);
+    }
 
     const productsMap = new Map<string, {
       id: string;
@@ -76,7 +80,7 @@ export async function POST(request: NextRequest) {
       stock: number;
       image_url: string;
     }>();
-    productsRows.forEach(row => productsMap.set(row.id, row as any));
+    productsRows?.forEach((row: { id: string; name: string; price: number; stock: number; image_url: string; }) => productsMap.set(row.id, row));
 
     let subtotalAmount = 0;
     const orderItemsData = [];
@@ -113,227 +117,208 @@ export async function POST(request: NextRequest) {
     const taxAmount = 0; // Placeholder for tax
     const totalAmount = subtotalAmount + shippingCost - discountAmount + taxAmount; // Total amount for Midtrans and orders table
 
-    const connection = await pool.getConnection();
-    try {
-      await connection.beginTransaction();
-
-      // 3. Save shipping address into `addresses` table
-      const shippingAddressId = uuidv4();
-      await connection.query(
-        `INSERT INTO addresses (id, user_id, label, recipient_name, phone, street, city, province, postal_code, is_default, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        [
-          shippingAddressId,
-          userId,
-          shippingAddress.notes || 'Default Shipping Address',
-          shippingAddress.fullName,
-          shippingAddress.phone,
-          shippingAddress.addressLine1, // Maps to 'street'
-          shippingAddress.regencyName, // Maps to 'city' name
-          shippingAddress.provinceName, // Maps to 'province' name
-          shippingAddress.postalCode,
-          false, // is_default
-        ]
-      );
-
-      // 4. Create new order into `orders` table
-      const orderId = uuidv4();
-      const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`; // Simple unique order number
-
-      await connection.query(
-        `INSERT INTO orders (
-            id, 
-            order_number, 
-            user_id, 
-            status, 
-            subtotal, 
-            discount, 
-            shipping_cost, 
-            tax, 
-            total, 
-            shipping_address_id,
-            tracking_number, 
-            estimated_delivery_date, 
-            payment_status, 
-            snap_token, 
-            midtrans_order_id, 
-            notes,
-            created_at, 
-            updated_at
-          ) 
-          VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-          )`,
-          [
-            orderId,
-            orderNumber,
-            userId,
-            "pending",
-            subtotalAmount,
-            discountAmount,
-            shippingCost,
-            taxAmount,
-            totalAmount,
-            shippingAddressId,
-            null, // tracking_number (initially null)
-            new Date(Date.now() + (parseInt(selectedShippingMethod.etd?.replace(/[^\d-]/g, '').split('-')[0] || '0') * 24 * 60 * 60 * 1000)).toISOString().slice(0, 10), // estimated_delivery_date
-            "pending",
-            null, // snap_token
-            null, // midtrans_order_id
-            shippingAddress.notes || null,
-          ]
-        );
-
-      // 5. Save order shipping details into `order_shipping` table
-      const orderShippingId = uuidv4();
-      // const etdFirstDigit = parseInt(selectedShippingMethod.etd?.replace(/[^\d-]/g, '').split('-')[0] || '0');
-      // const estimatedDeliveryDate = new Date(Date.now() + (etdFirstDigit * 24 * 60 * 60 * 1000)).toISOString().slice(0, 10); // Simple calc
-
-      await connection.query(
-        `INSERT INTO order_shipping (id, order_id, courier_code, courier_service, courier_description, courier_etd, cost, weight, origin_district, destination_district, raw_response, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        [
-          orderShippingId,
-          orderId,
-          selectedShippingMethod.courierCode,
-          selectedShippingMethod.service,
-          selectedShippingMethod.description,
-          selectedShippingMethod.etd,
-          selectedShippingMethod.cost,
-          selectedShippingMethod.total_weight,
-          selectedShippingMethod.origin_district_code,
-          selectedShippingMethod.destination_district_code,
-          JSON.stringify(selectedShippingMethod), 
-        ]
-      );
-
-      // 6. Save order items
-      const orderItemPromises = orderItemsData.map(item =>
-        connection.query(
-          `INSERT INTO order_items (id, order_id, product_id, variant_id, name, quantity, price, subtotal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-          [
-            uuidv4(),
-            orderId,
-            item.product_id,
-            null,
-            item.product_name,
-            item.quantity,
-            item.price_at_purchase,
-            item.quantity * item.price_at_purchase
-          ]
-        )
-      );
-      await Promise.all(orderItemPromises);
-
-      // 7. Deduct product stock
-      const stockUpdatePromises = cartItems.map(item =>
-        connection.query(
-          `UPDATE products SET stock = stock - ? WHERE id = ?`,
-          [item.quantity, item.product_id]
-        )
-      );
-      await Promise.all(stockUpdatePromises);
-
-      // 8. Clear the user's cart
-      await connection.query(
-        `DELETE FROM cart_items WHERE user_id = ?`,
-        [userId]
-      ); // Note: Assuming cart table is named 'cart', not 'cart_items'
-
-      // 9. Initiate Midtrans Transaction
-      const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY; 
-      const NEXT_PUBLIC_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL; 
-
-      if (!MIDTRANS_SERVER_KEY || !NEXT_PUBLIC_BASE_URL) {
-        throw new Error("Midtrans server key or base URL is not configured.");
-      }
-
-      // Midtrans transaction payload for Snap API
-      const midtransTransactionDetails = {
-        transaction_details: {
-          order_id: orderNumber, 
-          gross_amount: totalAmount, 
-        },
-        credit_card: {
-          secure: true
-        },
-        customer_details: {
-          first_name: shippingAddress.fullName.split(' ')[0],
-          last_name: shippingAddress.fullName.split(' ').slice(1).join(' '),
-          email: shippingAddress.email,
-          phone: shippingAddress.phone,
-          billing_address: {
-            first_name: shippingAddress.fullName.split(' ')[0],
-            last_name: shippingAddress.fullName.split(' ').slice(1).join(' '),
-            address: shippingAddress.addressLine1,
-            city: shippingAddress.regencyName,
-            postal_code: shippingAddress.postalCode,
-            phone: shippingAddress.phone,
-            country_code: 'IDN',
-          },
-          shipping_address: {
-            first_name: shippingAddress.fullName.split(' ')[0],
-            last_name: shippingAddress.fullName.split(' ').slice(1).join(' '),
-            address: shippingAddress.addressLine1,
-            city: shippingAddress.regencyName,
-            postal_code: shippingAddress.postalCode,
-            phone: shippingAddress.phone,
-            country_code: 'IDN',
-          },
-        },
-        item_details: midtransItemDetails.concat([{ 
-          id: 'shipping_cost',
-          name: `Biaya Pengiriman (${selectedShippingMethod.courierCode.toUpperCase()} - ${selectedShippingMethod.service})`,
-          price: shippingCost,
-          quantity: 1,
-        }]),
-        callbacks: {
-          notification: `${NEXT_PUBLIC_BASE_URL}/api/midtrans/webhook`,
-          finish: `${NEXT_PUBLIC_BASE_URL}/order-confirmation/${orderId}`,
-          error: `${NEXT_PUBLIC_BASE_URL}/order-confirmation/${orderId}?status=error`,
-          pending: `${NEXT_PUBLIC_BASE_URL}/order-confirmation/${orderId}?status=pending`,
-        }
-      };
-
-      const midtransResponse = await fetch('https://app.sandbox.midtrans.com/snap/v1/transactions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Basic ${Buffer.from(MIDTRANS_SERVER_KEY + ':').toString('base64')}`,
-        },
-        body: JSON.stringify(midtransTransactionDetails),
+    // 3. Save shipping address into `addresses` table
+    const shippingAddressId = uuidv4();
+    const { error: addressInsertError } = await supabase
+      .from("addresses")
+      .insert({
+        id: shippingAddressId,
+        user_id: userId,
+        label: shippingAddress.notes || 'Default Shipping Address',
+        recipient_name: shippingAddress.fullName,
+        phone: shippingAddress.phone,
+        street: shippingAddress.addressLine1,
+        city: shippingAddress.regencyName,
+        province: shippingAddress.provinceName,
+        postal_code: shippingAddress.postalCode,
+        is_default: false,
       });
 
-      const midtransResult = await midtransResponse.json();
+    if (addressInsertError) {
+      console.error("Error inserting address:", addressInsertError);
+      return apiError("Failed to save shipping address", 500);
+    }
 
-      if (midtransResponse.ok && midtransResult.token && midtransResult.redirect_url) {
-        // Update order with Midtrans transaction ID (if available, sometimes only token)
-        await connection.query(
-          `UPDATE orders SET snap_token = ?, midtrans_order_id = ?, payment_status = ? WHERE id = ?`,
-          [midtransResult.token, orderId, "pending", orderId] // Initial status
-        );
+    // 4. Create new order into `orders` table
+    const orderId = uuidv4();
+    const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`; // Simple unique order number
 
-        await connection.commit();
+    const { error: orderInsertError } = await supabase
+      .from("orders")
+      .insert({
+        id: orderId,
+        order_number: orderNumber,
+        user_id: userId,
+        status: "pending",
+        subtotal: subtotalAmount,
+        discount: discountAmount,
+        shipping_cost: shippingCost,
+        tax: taxAmount,
+        total: totalAmount,
+        shipping_address_id: shippingAddressId,
+        tracking_number: null,
+        estimated_delivery_date: new Date(Date.now() + (parseInt(selectedShippingMethod.etd?.replace(/[^\d-]/g, '').split('-')[0] || '0') * 24 * 60 * 60 * 1000)).toISOString().slice(0, 10),
+        payment_status: "pending",
+        snap_token: null,
+        midtrans_order_id: null,
+        notes: shippingAddress.notes || null,
+      });
 
-        return apiResponse({
-          orderId,
-          orderNumber,
-          totalAmount,
-          shippingCost,
-          midtransSnapToken: midtransResult.token,
-          midtransRedirectUrl: midtransResult.redirect_url,
-        }, { status: 201 });
-      } else {
-        await connection.rollback();
-        console.error("Midtrans Snap API failed to create transaction:", midtransResult);
-        return apiError(midtransResult.snap_token || midtransResult.error_messages?.join(', ') || "Failed to initiate Midtrans transaction", 500);
+    if (orderInsertError) {
+      console.error("Error inserting order:", orderInsertError);
+      return apiError("Failed to create order", 500);
+    }
+
+    // 5. Save order shipping details into `order_shipping` table
+    const orderShippingId = uuidv4();
+    const { error: orderShippingInsertError } = await supabase
+      .from("order_shipping")
+      .insert({
+        id: orderShippingId,
+        order_id: orderId,
+        courier_code: selectedShippingMethod.courierCode,
+        courier_service: selectedShippingMethod.service,
+        courier_description: selectedShippingMethod.description,
+        courier_etd: selectedShippingMethod.etd,
+        cost: selectedShippingMethod.cost,
+        weight: selectedShippingMethod.total_weight,
+        origin_district: selectedShippingMethod.origin_district_code,
+        destination_district: selectedShippingMethod.destination_district_code,
+        raw_response: selectedShippingMethod, // Supabase can handle JSONB directly
+      });
+
+    if (orderShippingInsertError) {
+      console.error("Error inserting order shipping:", orderShippingInsertError);
+      return apiError("Failed to save order shipping details", 500);
+    }
+
+    // 6. Save order items
+    const orderItemsToInsert = orderItemsData.map(item => ({
+      id: uuidv4(),
+      order_id: orderId,
+      product_id: item.product_id,
+      variant_id: null, // Assuming no product variants for now
+      name: item.product_name,
+      quantity: item.quantity,
+      price: item.price_at_purchase,
+      subtotal: item.quantity * item.price_at_purchase,
+    }));
+
+    const { error: orderItemsInsertError } = await supabase.from("order_items").insert(orderItemsToInsert);
+
+    if (orderItemsInsertError) {
+      console.error("Error inserting order items:", orderItemsInsertError);
+      return apiError("Failed to save order items", 500);
+    }
+
+    // 7. Deduct product stock
+    const stockUpdatePromises = cartItems.map(async (item) => {
+      const { error: stockUpdateError } = await supabase
+        .from("products")
+        .update({ stock: productsMap.get(item.product_id)!.stock - item.quantity })
+        .eq("id", item.product_id);
+      if (stockUpdateError) {
+        throw new Error(`Failed to update stock for product ${item.product_id}: ${stockUpdateError.message}`);
       }
+    });
+    await Promise.all(stockUpdatePromises);
 
-    } catch (dbError) {
-      await connection.rollback();
-      console.error("Database transaction error during checkout:", dbError);
-      return apiError("Failed to process order. Please try again.", 500);
-    } finally {
-      connection.release();
+    // 8. Clear the user's cart
+    const { error: cartClearError } = await supabase
+      .from("cart_items")
+      .delete()
+      .eq("user_id", userId);
+
+    if (cartClearError) {
+      console.error("Error clearing cart:", cartClearError);
+      return apiError("Failed to clear cart", 500);
+    }
+
+    // 9. Initiate Midtrans Transaction
+    const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
+    const NEXT_PUBLIC_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
+
+    if (!MIDTRANS_SERVER_KEY || !NEXT_PUBLIC_BASE_URL) {
+      throw new Error("Midtrans server key or base URL is not configured.");
+    }
+
+    // Midtrans transaction payload for Snap API
+    const midtransTransactionDetails = {
+      transaction_details: {
+        order_id: orderNumber, 
+        gross_amount: totalAmount, 
+      },
+      credit_card: {
+        secure: true
+      },
+      customer_details: {
+        first_name: shippingAddress.fullName.split(' ')[0],
+        last_name: shippingAddress.fullName.split(' ').slice(1).join(' '),
+        email: shippingAddress.email,
+        phone: shippingAddress.phone,
+        billing_address: {
+          first_name: shippingAddress.fullName.split(' ')[0],
+          last_name: shippingAddress.fullName.split(' ').slice(1).join(' '),
+          address: shippingAddress.addressLine1,
+          city: shippingAddress.regencyName,
+          postal_code: shippingAddress.postalCode,
+          phone: shippingAddress.phone,
+          country_code: 'IDN',
+        },
+        shipping_address: {
+          first_name: shippingAddress.fullName.split(' ')[0],
+          last_name: shippingAddress.fullName.split(' ').slice(1).join(' '),
+          address: shippingAddress.addressLine1,
+          city: shippingAddress.regencyName,
+          postal_code: shippingAddress.postalCode,
+          phone: shippingAddress.phone,
+          country_code: 'IDN',
+        },
+      },
+      item_details: midtransItemDetails.concat([{ 
+        id: 'shipping_cost',
+        name: `Biaya Pengiriman (${selectedShippingMethod.courierCode.toUpperCase()} - ${selectedShippingMethod.service})`,
+        price: shippingCost,
+        quantity: 1,
+      }]),
+      callbacks: {
+        notification: `${NEXT_PUBLIC_BASE_URL}/api/midtrans/webhook`,
+        finish: `${NEXT_PUBLIC_BASE_URL}/order-confirmation/${orderId}`,
+        error: `${NEXT_PUBLIC_BASE_URL}/order-confirmation/${orderId}?status=error`,
+        pending: `${NEXT_PUBLIC_BASE_URL}/order-confirmation/${orderId}?status=pending`,
+      }
+    };
+
+    const midtransResponse = await fetch('https://app.sandbox.midtrans.com/snap/v1/transactions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Basic ${btoa(MIDTRANS_SERVER_KEY + ':')}`,
+      },
+      body: JSON.stringify(midtransTransactionDetails),
+    });
+
+    const midtransResult = await midtransResponse.json();
+
+    if (midtransResponse.ok && midtransResult.token && midtransResult.redirect_url) {
+      // Update order with Midtrans transaction ID (if available, sometimes only token)
+      await supabase
+        .from("orders")
+        .update({ snap_token: midtransResult.token, midtrans_order_id: orderId, payment_status: "pending" })
+        .eq("id", orderId);
+
+      return apiResponse({
+        orderId,
+        orderNumber,
+        totalAmount,
+        shippingCost,
+        midtransSnapToken: midtransResult.token,
+        midtransRedirectUrl: midtransResult.redirect_url,
+      }, { status: 201 });
+    } else {
+      console.error("Midtrans Snap API failed to create transaction:", midtransResult);
+      return apiError(midtransResult.snap_token || midtransResult.error_messages?.join(', ') || "Failed to initiate Midtrans transaction", 500);
     }
   } catch (error) {
     console.error("Checkout API error:", error);

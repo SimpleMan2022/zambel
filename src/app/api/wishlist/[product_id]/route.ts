@@ -1,7 +1,7 @@
 import { apiResponse, apiError } from "@/lib/api-response";
-import pool from "@/lib/db";
 import { getUserIdFromRequest } from "@/lib/auth-utils";
 import { NextRequest } from "next/server";
+import { supabase } from '@/lib/supabase';
 
 export async function DELETE(
   request: NextRequest,
@@ -22,11 +22,16 @@ export async function DELETE(
       return apiError("Product ID is required", 400);
     }
 
-    await pool.query(
-      `DELETE FROM wishlist 
-       WHERE user_id = ? AND product_id = ?`,
-      [userId, cleanProductId]
-    );
+    const { error } = await supabase
+      .from("wishlist")
+      .delete()
+      .eq("user_id", userId)
+      .eq("product_id", cleanProductId);
+
+    if (error) {
+      console.error("Error removing product from wishlist:", error);
+      return apiError("Failed to remove product from wishlist", 500);
+    }
 
     return apiResponse(
       { message: "Product removed from wishlist" },

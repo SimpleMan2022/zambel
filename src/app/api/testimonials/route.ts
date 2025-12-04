@@ -1,20 +1,21 @@
-import { NextRequest } from "next/server";
 import { apiResponse, apiError } from "@/lib/api-response";
-import pool from "@/lib/db";
-import { RowDataPacket } from "mysql2";
+import { supabase } from '@/lib/supabase';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const [testimonialsRows] = await pool.query<RowDataPacket[]>(
-      `SELECT id, name, role, avatar_url, comment, rating FROM testimonials ORDER BY created_at DESC`
-    );
+    const { data: testimonials, error } = await supabase
+      .from("testimonials")
+      .select("id, user_id, name, role, avatar_url, comment, rating, is_featured, created_at, updated_at")
+      .order("created_at", { ascending: false });
 
-    return apiResponse(testimonialsRows);
+    if (error) {
+      console.error("Error fetching testimonials:", error);
+      return apiError("Failed to fetch testimonials", 500);
+    }
+
+    return apiResponse(testimonials);
   } catch (error) {
     console.error("Error fetching testimonials:", error);
-    return apiError(
-      error instanceof Error ? error.message : "Failed to fetch testimonials",
-      500
-    );
+    return apiError("Failed to fetch testimonials", 500);
   }
 }

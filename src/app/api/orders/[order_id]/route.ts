@@ -1,8 +1,7 @@
 import { NextRequest } from "next/server";
 import { apiResponse, apiError } from "@/lib/api-response";
-import pool from "@/lib/db";
 import { getUserIdFromRequest } from "@/lib/auth-utils";
-import { RowDataPacket } from "mysql2";
+import { supabase } from '@/lib/supabase';
 
 export async function GET(
   request: NextRequest,
@@ -18,73 +17,127 @@ export async function GET(
     if (!order_id) return apiError("Order ID is required", 400);
 
     // ==========================
-    // 1. FETCH ORDER + ADDRESS
+    // 1. FETCH ORDER + ADDRESS + SHIPPING
     // ==========================
-    const [orderRows] = await pool.query<RowDataPacket[]>(
-      `SELECT 
-          o.id,
-          o.order_number,
-          o.user_id,
-          o.status AS order_status,
-          o.subtotal,
-          o.discount,
-          o.shipping_cost,
-          o.tax,
-          o.total,
-          o.payment_status,
-          o.snap_token,
-          o.midtrans_order_id,
-          o.created_at,
+    const { data: orderData, error: orderError } = await supabase
+      .from("orders")
+      .select(
+        `
+        id,
+        order_number,
+        user_id,
+        status,
+        subtotal,
+        discount,
+        shipping_cost,
+        tax,
+        total,
+        payment_status,
+        snap_token,
+        midtrans_order_id,
+        created_at,
+        addresses!shipping_address_id (
+          recipient_name,
+          phone,
+          street,
+          city,
+          province,
+          postal_code,
+          label
+        ),
+        order_shipping (
+          courier_service
+        )
+      `
+      )
+      .eq("id", order_id)
+      .eq("user_id", userId)
+      .single();
 
-          a.recipient_name AS ship_recipient_name,
-          a.phone AS ship_phone,
-          a.street AS ship_street,
-          a.city AS ship_city,
-          a.province AS ship_province,
-          a.postal_code AS ship_postal_code,
-          a.label AS ship_label
-
-       FROM orders o
-       JOIN addresses a ON o.shipping_address_id = a.id
-       LEFT JOIN order_shipping os ON o.id = os.order_id
-       WHERE o.id = ? AND o.user_id = ?`,
-      [order_id, userId]
-    );
-
-    if (orderRows.length === 0)
+    if (orderError || !orderData) {
+      console.error("Error fetching order:", orderError);
       return apiError("Order not found", 404);
+    }
 
-    const order = orderRows[0];
+    console.log("Raw orderData:", orderData);
+    console.log("Raw orderData.addresses:", orderData.addresses);
+
+    type Address = {
+      recipient_name: string;
+      phone: string;
+      street: string;
+      city: string;
+      province: string;
+      postal_code: string;
+      label: string;
+    };
+    
+    const addr = orderData.addresses as unknown as Address | null;
+    
+    const shipping = orderData.order_shipping?.[0] || null;
+
+    const order = {
+      ...orderData,
+      order_status: orderData.status,
+
+      ship_recipient_name: addr?.recipient_name || null,
+      ship_phone: addr?.phone || null,
+      ship_street: addr?.street || null,
+      ship_city: addr?.city || null,
+      ship_province: addr?.province || null,
+      ship_postal_code: addr?.postal_code || null,
+      ship_label: addr?.label || null,
+
+      courier_name: shipping?.courier_service || null,
+    };
+
+
+    // Remove nested objects after extraction
+    delete (order as any).addresses;
+    delete (order as any).order_shipping;
 
     // ==========================
     // 2. FETCH ORDER ITEMS (JOIN PRODUCTS)
     // ==========================
-    const [itemRows] = await pool.query<RowDataPacket[]>(
-      `SELECT 
-          oi.id,
-          oi.product_id,
-          oi.name AS product_name,
-          oi.quantity,
-          oi.price AS price_at_purchase,
-          oi.subtotal,
+    const { data: itemRows, error: itemError } = await supabase
+      .from("order_items")
+      .select(
+        `
+        id,
+        product_id,
+        quantity,
+        subtotal,
+        products (
+          name,
+          image_url,
+          price
+        )
+      `
+      )
+      .eq("order_id", order_id);
 
-          p.image_url
+    if (itemError) {
+      console.error("Error fetching order items:", itemError);
+      return apiError("Failed to fetch order items", 500);
+    }
 
-        FROM order_items oi
-        JOIN products p ON oi.product_id = p.id
-        WHERE oi.order_id = ?`,
-      [order_id]
-    );
+    const orderItems = itemRows.map((item: any) => ({
+      id: item.id,
+      product_id: item.product_id,
+      product_name: item.products.name, // Get name from nested products object
+      quantity: item.quantity,
+      price_at_purchase: item.products.price, // Get price from nested products object
+      subtotal: item.subtotal,
+      image_url: item.products.image_url,
+    }));
 
     // ==========================
     // FINAL RESPONSE
     // ==========================
     return apiResponse({
       ...order,
-      courier_name: (order as any).courier_service || null, // Assuming courier_service from order_shipping is courier name
-      items: itemRows,
+      items: orderItems,
     });
-
   } catch (error) {
     console.error("Error fetching order details:", error);
     return apiError(

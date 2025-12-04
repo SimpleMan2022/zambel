@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"; // Import NextResponse
 import { apiResponse, apiError } from "@/lib/api-response";
-import pool from "@/lib/db";
 import { getUserIdFromRequest } from "@/lib/auth-utils";
-import { RowDataPacket } from "mysql2";
 import bcrypt from "bcryptjs"; // Assuming bcryptjs is installed
+import { supabase } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,16 +22,18 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Fetch user's current password hash
-    const [userRows] = await pool.query<RowDataPacket[]>(
-      `SELECT password_hash FROM users WHERE id = ?`,
-      [userId]
-    );
+    const { data: userData, error: fetchError } = await supabase
+      .from("users")
+      .select("password_hash")
+      .eq("id", userId)
+      .single();
 
-    if (userRows.length === 0) {
+    if (fetchError || !userData) {
+      console.error("Error fetching user for password change:", fetchError);
       return apiError("User not found", 404);
     }
 
-    const storedHash = userRows[0].password_hash;
+    const storedHash = userData.password_hash;
 
     // 2. Verify current password
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, storedHash);
@@ -45,10 +46,15 @@ export async function POST(request: NextRequest) {
     const newPasswordHash = await bcrypt.hash(newPassword, salt);
 
     // 4. Update password in the database
-    await pool.query(
-      `UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [newPasswordHash, userId]
-    );
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({ password_hash: newPasswordHash })
+      .eq("id", userId);
+
+    if (updateError) {
+      console.error("Error updating password:", updateError);
+      return apiError("Failed to update password", 500);
+    }
 
     return apiResponse({ message: "Password updated successfully" });
 
