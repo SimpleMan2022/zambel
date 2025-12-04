@@ -1,17 +1,20 @@
+export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from 'next/server';
 import { comparePassword, generateToken } from '@/lib/auth'; // Import generateToken from auth.ts
 import {LoginRequest, AuthResponse, User} from '@/types/auth';
-import {RowDataPacket} from "mysql2";
 import { cookies } from 'next/headers'; // Import cookies
 import { supabase } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("[LOGIN_ROUTE] Menerima permintaan login.");
     const body: LoginRequest = await request.json();
     const { email, password } = body;
 
     // Validasi input
     if (!email || !password) {
+      console.log("[LOGIN_ROUTE] Validasi gagal: Email atau password tidak ada.");
       return NextResponse.json<AuthResponse>(
           {
             success: false,
@@ -21,11 +24,13 @@ export async function POST(request: NextRequest) {
           { status: 400 }
       );
     }
+    console.log(`[LOGIN_ROUTE] Mencoba login dengan email: ${email}`);
 
     // Cari user berdasarkan email
     const { data: user, error } = await supabase.from('users').select('*').eq('email', email).single();
 
     if (error || !user) {
+      console.log("[LOGIN_ROUTE] User tidak ditemukan atau error database.", error);
       return NextResponse.json<AuthResponse>(
             {
               success: false,
@@ -35,11 +40,13 @@ export async function POST(request: NextRequest) {
             { status: 401 }
         );
     }
+    console.log("[LOGIN_ROUTE] User ditemukan.");
 
     // Verifikasi password
     const isPasswordValid = await comparePassword(password, user.password_hash);
 
     if (!isPasswordValid) {
+      console.log("[LOGIN_ROUTE] Password tidak valid.");
       return NextResponse.json<AuthResponse>(
             {
               success: false,
@@ -49,33 +56,21 @@ export async function POST(request: NextRequest) {
             { status: 401 }
         );
     }
+    console.log("[LOGIN_ROUTE] Password valid. Membuat token...");
 
     // Generate JWT token
     const token = generateToken(user.id, user.email);
-
-    // Dapatkan domain untuk cookie
-    const vercelUrl = process.env.VERCEL_URL; // e.g., your-app.vercel.app or localhost:3000
-    let cookieDomain: string | undefined = undefined;
-
-    if (vercelUrl) {
-      // Hapus protokol (http://, https://) dan path jika ada
-      const url = new URL(vercelUrl.startsWith("http") ? vercelUrl : `https://${vercelUrl}`);
-      cookieDomain = url.hostname;
-      // Untuk lingkungan lokal, gunakan undefined agar browser mengaturnya secara otomatis
-      if (cookieDomain.includes("localhost") || cookieDomain.includes("127.0.0.1")) {
-        cookieDomain = undefined;
-      }
-    }
+    console.log("[LOGIN_ROUTE] Token berhasil dibuat. Mengatur cookie...");
 
     // Set JWT as httpOnly cookie
     (await cookies()).set('token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",  // Vercel = true
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 7, // 1 week
-        ...(cookieDomain && { domain: cookieDomain }),
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
       });
+    console.log("[LOGIN_ROUTE] Cookie token telah diatur. Login berhasil.");
 
     // Hapus password dari response
     const { password_hash, ...userWithoutPassword } = user;
@@ -91,7 +86,7 @@ export async function POST(request: NextRequest) {
           { status: 200 }
       );
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('[LOGIN_ROUTE] Login error global:', error);
     return NextResponse.json<AuthResponse>(
         {
           success: false,
