@@ -92,17 +92,21 @@ export const apiClient = {
 
 
 export function getUserIdFromRequest(request: NextRequest): string | null {
+  console.log("[AUTH_UTILS] Mencoba mendapatkan user ID dari request.");
   const token = request.cookies.get('token')?.value; // Read from httpOnly cookie
+  console.log("[AUTH_UTILS] Token dari request cookies:", token ? "Ada" : "Tidak ada");
 
   if (!token) {
+    console.log("[AUTH_UTILS] Token tidak ditemukan di request cookies.");
     return null;
   }
 
   try {
     const decoded = verifyToken(token);
-    return decoded?.id || null; 
+    console.log("[AUTH_UTILS] Token berhasil didekode.", decoded?.id ? `User ID: ${decoded.id}` : "Tidak ada User ID");
+    return decoded?.id || null;
   } catch (error) {
-    console.error("Error in getUserIdFromRequest:", error);
+    console.error("[AUTH_UTILS] Error di getUserIdFromRequest:", error);
     return null;
   }
 }
