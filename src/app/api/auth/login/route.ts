@@ -63,13 +63,24 @@ export async function POST(request: NextRequest) {
     console.log("[LOGIN_ROUTE] Token berhasil dibuat. Mengatur cookie...");
 
     // Set JWT as httpOnly cookie
-    (await cookies()).set('token', token, {
+    const response = NextResponse.json({
+      success: true,
+      message: "Login berhasil",
+      data: { user: { ...user, password_hash: undefined } },
+    });
+
+    console.log("response", response);
+
+    response.cookies.set({
+      name: "token",
+      value: token,
       httpOnly: true,
       secure: true,
       sameSite: "none",
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
-      });
+    });
+
     console.log("[LOGIN_ROUTE] Cookie token telah diatur. Login berhasil.");
 
     // Hapus password dari response
