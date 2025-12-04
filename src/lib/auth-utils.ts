@@ -50,47 +50,46 @@ export const getClientToken = (): string | null => {
 export const apiClient = {
   async request(url: string, options: RequestInit = {}) {
     const headers = new Headers(options.headers);
-
-    headers.set('Content-Type', 'application/json');
+    headers.set("Content-Type", "application/json");
 
     const response = await fetch(url, {
       ...options,
       headers,
+      credentials: "include", // ← FIX WAJIB
     });
 
     if (response.status === 401) {
-      document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'; 
-      window.location.href = '/login';
-      throw new Error('Unauthorized');
+      document.cookie =
+        "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      window.location.href = "/login";
+      throw new Error("Unauthorized");
     }
 
     return response;
   },
 
-  async get(url: string, options?: RequestInit) {
-    return this.request(url, { ...options, method: 'GET' });
+  get(url: string, options?: RequestInit) {
+    return this.request(url, { ...options, method: "GET" });
   },
-
-  async post<T>(url: string, data?: T, options?: RequestInit) {
+  post<T>(url: string, data?: T, options?: RequestInit) {
     return this.request(url, {
       ...options,
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(data),
     });
   },
-
-  async put<T>(url: string, data?: T, options?: RequestInit) {
+  put<T>(url: string, data?: T, options?: RequestInit) {
     return this.request(url, {
       ...options,
-      method: 'PUT',
+      method: "PUT",
       body: JSON.stringify(data),
     });
   },
-
-  async delete(url: string, options?: RequestInit) {
-    return this.request(url, { ...options, method: 'DELETE' });
+  delete(url: string, options?: RequestInit) {
+    return this.request(url, { ...options, method: "DELETE" });
   },
 };
+
 
 export function getUserIdFromRequest(request: NextRequest): string | null {
   const token = request.cookies.get('token')?.value; // Read from httpOnly cookie
