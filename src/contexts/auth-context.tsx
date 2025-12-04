@@ -22,6 +22,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Helper untuk membaca cookie
 function getTokenFromCookie(): string | null {
   if (typeof document === "undefined") return null;
+  console.log("[AUTH_CONTEXT] Semua cookie yang tersedia:", document.cookie); // Log semua cookie
   const match = document.cookie.match(/token=([^;]+)/);
   const token = match ? match[1] : null;
   console.log("[AUTH_CONTEXT] Token dari cookie:", token ? "Ada" : "Tidak ada");
