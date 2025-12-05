@@ -95,6 +95,7 @@ export function getUserIdFromRequest(request: NextRequest): string | null {
   console.log("[AUTH_UTILS] Mencoba mendapatkan user ID dari request.");
   const token = request.cookies.get('token')?.value; // Read from httpOnly cookie
   console.log("[AUTH_UTILS] Token dari request cookies:", token ? "Ada" : "Tidak ada");
+  console.log("[AUTH_UTILS] Request cookies object:", request.cookies);
 
   if (!token) {
     console.log("[AUTH_UTILS] Token tidak ditemukan di request cookies.");
