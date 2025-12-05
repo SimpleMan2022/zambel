@@ -55,8 +55,8 @@ export default function RegisterPage() {
     try {
       const response = await authAPI.register(formData)
 
-      if (response.success && response.data) {
-        login(response.data.user)
+      if (response.success && response.data && response.data.token) {
+        login(response.data.user, response.data.token)
 
         // Tampilkan alert sukses
         setAlert({
