@@ -47,7 +47,7 @@ interface Review {
 
 export default function ProductDetailPage() {
   const { id } = useParams();
-  const { isAuthenticated, updateCartItemCount } = useAuth(); 
+  const { isAuthenticated, updateCartItemCount, token } = useAuth(); 
   const [product, setProduct] = useState<Product | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,10 +105,14 @@ export default function ProductDetailPage() {
         }
       };
 
-      const checkWishlistStatus = async () => {
-        if (!isAuthenticated || !id) return;
+      const checkWishlistStatus = async (authToken: string | null) => {
+        if (!isAuthenticated || !id || !authToken) return;
         try {
-          const response = await fetch('/api/wishlist');
+          const response = await fetch('/api/wishlist', {
+            headers: {
+              Authorization: `Bearer ${authToken}`,
+            },
+          });
           const result = await response.json();
           if (result.success && result.data) {
             const wishlistedProductIds = result.data.map((item: { id: string }) => item.id);
@@ -120,9 +124,11 @@ export default function ProductDetailPage() {
       };
 
       fetchProductAndReviews();
-      checkWishlistStatus();
+      if (isAuthenticated && token) {
+        checkWishlistStatus(token);
+      }
     }
-  }, [id, isAuthenticated]);
+  }, [id, isAuthenticated, token]);
 
   const formatPrice = (value: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(value);
@@ -146,24 +152,53 @@ export default function ProductDetailPage() {
   };
 
   const handleAddToCart = async () => {
-    if (!isAuthenticated || !product?.id) {
+    if (!isAuthenticated || !product?.id || !token) {
       alert("Please log in to add items to your cart.");
       return;
     }
 
     try {
+      // 1. Fetch current cart to check if item already exists
+      const currentCartResponse = await fetch("/api/cart", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const currentCartResult = await currentCartResponse.json();
+
+      let existingCartItemQuantity = 0;
+      if (currentCartResult.success && currentCartResult.data) {
+        const existingItem = currentCartResult.data.find(
+          (item: any) => item.productId === product.id
+        );
+        if (existingItem) {
+          existingCartItemQuantity = existingItem.quantity;
+        }
+      }
+
+      const newTotalQuantity = existingCartItemQuantity + quantity;
+
+      // 2. Send updated quantity to API
       const response = await fetch("/api/cart", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ product_id: product.id, quantity: quantity }),
+        body: JSON.stringify({ product_id: product.id, quantity: newTotalQuantity }),
       });
 
       const result = await response.json();
 
       if (response.ok && result.success) {
-        updateCartItemCount(result.data?.count || (await fetch('/api/cart/count').then(res => res.json()).then(data => data.data.count))); // Update cart count
+        // Update cart count
+        const cartCountResponse = await fetch('/api/cart/count', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const cartCountData = await cartCountResponse.json();
+        updateCartItemCount(cartCountData.data?.count || 0);
         setShowAddToCartSuccessModal(true); // Show success modal
       } else {
         alert(result.message || "Failed to add product to cart.");
@@ -175,7 +210,7 @@ export default function ProductDetailPage() {
   };
 
   const handleToggleWishlist = async () => {
-    if (!isAuthenticated || !product?.id) {
+    if (!isAuthenticated || !product?.id || !token) {
       // Redirect to login or show a message
       alert("Please log in to manage your wishlist.");
       return;
@@ -183,18 +218,22 @@ export default function ProductDetailPage() {
 
     try {
       let response;
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
+
       if (isWishlisted) {
         // Remove from wishlist
         response = await fetch(`/api/wishlist/${product.id}`, {
           method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
         });
       } else {
         // Add to wishlist
         response = await fetch('/api/wishlist', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify({ product_id: product.id }),
         });
       }

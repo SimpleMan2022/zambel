@@ -1,5 +1,3 @@
-export const runtime = "nodejs";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getUserIdFromRequest } from "@/lib/auth-utils";
 import { apiResponse, apiError } from "@/lib/api-response";
@@ -8,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = getUserIdFromRequest(request);
+    const userId = await getUserIdFromRequest(request);
 
     if (!userId) {
       return apiError("Unauthorized", 401);
@@ -56,7 +54,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = getUserIdFromRequest(request);
+    const userId = await getUserIdFromRequest(request);
 
     if (!userId) {
       return apiError("Unauthorized", 401);

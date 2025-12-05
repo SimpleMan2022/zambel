@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import * as jose from 'jose';
 
-const JWT_SECRET = process.env.JWT_SECRET; // Removed default value
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 export interface JwtPayload {
   id: string;
@@ -23,9 +23,9 @@ export const comparePassword = async (
   return bcrypt.compare(password, hashedPassword);
 };
 
-export const generateToken = (id: string, email: string, role?: string): string => {
+export const generateToken = async (id: string, email: string, role?: string): Promise<string> => {
   console.log("[AUTH_LIB] Mencoba membuat token JWT.");
-  if (!JWT_SECRET) {
+  if (!process.env.JWT_SECRET) {
     console.error("[AUTH_LIB] Error: JWT_SECRET tidak didefinisikan di environment variables saat membuat token.");
     throw new Error("JWT_SECRET is not defined in environment variables.");
   }
@@ -33,27 +33,27 @@ export const generateToken = (id: string, email: string, role?: string): string 
   if (role) {
     payload.role = role;
   }
-  const token = jwt.sign(
-      payload,
-      JWT_SECRET,
-      { expiresIn: '7d' }
-  );
+  const token = await new jose.SignJWT(payload)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(JWT_SECRET);
   console.log("[AUTH_LIB] Token JWT berhasil dibuat.");
   return token;
 };
 
-export const verifyToken = (token: string): JwtPayload |null => {
+export const verifyToken = async (token: string): Promise<JwtPayload | null> => {
   console.log("[AUTH_LIB] Mencoba memverifikasi token JWT.");
-  if (!JWT_SECRET) {
+  if (!process.env.JWT_SECRET) {
     console.error("[AUTH_LIB] Error: JWT_SECRET tidak didefinisikan di environment variables saat memverifikasi token.");
     return null;
   }
   try {
     console.log("[AUTH_LIB] Token yang akan diverifikasi:", token);
-    console.log("[AUTH_LIB] JWT_SECRET yang digunakan:", JWT_SECRET);
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
-    console.log("[AUTH_LIB] Token JWT berhasil diverifikasi.", decoded);
-    return decoded;
+    console.log("[AUTH_LIB] JWT_SECRET yang digunakan (length):")
+    const { payload } = await jose.jwtVerify(token, JWT_SECRET);
+    console.log("[AUTH_LIB] Token JWT berhasil diverifikasi.", payload);
+    return payload as unknown as JwtPayload;
   } catch (error) {
     console.error("[AUTH_LIB] Error memverifikasi JWT token:", error);
     return null;

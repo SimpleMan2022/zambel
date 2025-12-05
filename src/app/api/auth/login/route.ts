@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     console.log("[LOGIN_ROUTE] Password valid. Membuat token...");
 
     // Generate JWT token
-    const token = generateToken(user.id, user.email);
+    const token = await generateToken(user.id, user.email);
     console.log("[LOGIN_ROUTE] Token berhasil dibuat. Mengirimkan token di respon.");
 
 

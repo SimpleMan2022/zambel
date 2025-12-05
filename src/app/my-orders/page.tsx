@@ -24,15 +24,15 @@ interface OrderSummary {
 }
 
 export default function MyOrdersPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, token } = useAuth();
   const router = useRouter();
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all'); // New state for filtering
 
-  const fetchOrders = useCallback(async () => {
-    if (!isAuthenticated) {
+  const fetchOrders = useCallback(async (authToken: string | null) => {
+    if (!isAuthenticated || !authToken) {
       setIsLoading(false);
       return;
     }
@@ -43,7 +43,11 @@ export default function MyOrdersPage() {
       if (filterStatus && filterStatus !== 'all') {
         queryParams.append('status', filterStatus);
       }
-      const response = await fetch(`/api/orders?${queryParams.toString()}`);
+      const response = await fetch(`/api/orders?${queryParams.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
       if (!response.ok) {
         throw new Error("Failed to fetch orders");
       }
@@ -62,14 +66,17 @@ export default function MyOrdersPage() {
   }, [isAuthenticated, filterStatus]); // Add filterStatus to dependencies
 
   useEffect(() => {
+    console.log("MyOrdersPage useEffect: authLoading", authLoading, "isAuthenticated", isAuthenticated, "token", token);
     if (!authLoading) {
-      if (isAuthenticated) {
-        fetchOrders();
-      } else {
+      if (isAuthenticated && token) {
+        console.log("MyOrdersPage calling fetchOrders with token:", token);
+        fetchOrders(token);
+      } else if (!isAuthenticated && !token) {
+        console.log("MyOrdersPage redirecting to login.");
         router.replace("/login");
       }
     }
-  }, [authLoading, isAuthenticated, fetchOrders, router]);
+  }, [authLoading, isAuthenticated, token, fetchOrders, router]);
 
   const formatPrice = (value: string | number) => {
     const numValue = typeof value === 'string' ? parseFloat(value) : value;

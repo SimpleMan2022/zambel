@@ -37,7 +37,7 @@ function debounce<T extends (...args: any[]) => void>(func: T, delay: number) {
 }
 
 export default function CartPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, token } = useAuth();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -45,8 +45,8 @@ export default function CartPage() {
 
   const itemQuantities = useRef(new Map<string, number>());
 
-  const fetchCartItems = useCallback(async () => {
-    if (!isAuthenticated) {
+  const fetchCartItems = useCallback(async (authToken: string | null) => {
+    if (!isAuthenticated || !authToken) {
       setIsLoading(false);
       return;
     }
@@ -55,7 +55,11 @@ export default function CartPage() {
     setError(null);
 
     try {
-      const response = await apiClient.get("/api/cart"); // Use apiClient.get
+      const response = await apiClient.get("/api/cart", {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
       const result = await response.json();
 
       if (result.success) {
@@ -82,8 +86,10 @@ export default function CartPage() {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (!authLoading) fetchCartItems();
-  }, [authLoading, fetchCartItems]);
+    if (!authLoading && isAuthenticated && token) {
+      fetchCartItems(token);
+    }
+  }, [authLoading, isAuthenticated, token, fetchCartItems]);
 
   // ==============================
   // UPDATE QUANTITY (NO REFRESH)

@@ -29,11 +29,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAuthenticated = !!token;
 
   // ✅ FETCH USER PROFILE (Bearer)
-  const fetchUserProfile = useCallback(async () => {
+  const fetchUserProfile = useCallback(async (initialToken: string | null = null) => {
     setIsLoading(true);
 
-    const storedToken = localStorage.getItem("token");
-    if (!storedToken) {
+    const tokenToUse = initialToken || localStorage.getItem("token");
+    if (!tokenToUse) {
       setUser(null);
       setToken(null);
       setIsLoading(false);
@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch("/api/auth/profile", {
         headers: {
-          Authorization: `Bearer ${storedToken}`,
+          Authorization: `Bearer ${tokenToUse}`,
         },
       });
 
@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.ok && data.success) {
         // ✅ TOKEN VALID → LANJUTKAN SESSION
         setUser(data.data);
-        setToken(storedToken);
+        setToken(tokenToUse);
       } else if (res.status === 401) {
         // ✅ BARU HAPUS TOKEN KALAU MEMANG INVALID
         // localStorage.removeItem("token");
@@ -95,8 +95,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const storedToken = localStorage.getItem("token");
     if (storedToken) {
       setToken(storedToken);
+      fetchUserProfile(storedToken); // Pass the stored token directly
+    } else {
+      setIsLoading(false); // No token, so not loading auth
     }
-    fetchUserProfile();
   }, [fetchUserProfile]);
 
   useEffect(() => {

@@ -19,7 +19,7 @@ interface WishlistItem {
 }
 
 export default function WishlistPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, token } = useAuth();
   const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,10 +33,19 @@ export default function WishlistPage() {
       return;
     }
 
-    const fetchWishlist = async () => {
+    const fetchWishlist = async (authToken: string | null) => {
+      if (!authToken) {
+        setError("Please log in to view your wishlist.");
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
-        const response = await apiClient.get("/api/wishlist");
+        const response = await apiClient.get("/api/wishlist", {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
         const result = await response.json();
 
         if (result.success) {
@@ -52,13 +61,17 @@ export default function WishlistPage() {
       }
     };
 
-    fetchWishlist();
-  }, [isAuthenticated, authLoading]);
+    fetchWishlist(token);
+  }, [isAuthenticated, authLoading, token]);
 
   const handleRemoveFromWishlist = async (productId: string) => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !token) return;
     try {
-      const response = await apiClient.delete(`/api/wishlist/${productId}`);
+      const response = await apiClient.delete(`/api/wishlist/${productId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const result = await response.json();
 
       if (result.success) {

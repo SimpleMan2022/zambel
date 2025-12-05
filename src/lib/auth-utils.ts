@@ -84,7 +84,7 @@ export const apiClient = {
   },
 };
 
-export function getUserIdFromRequest(request: NextRequest): string | null {
+export async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {
   const authHeader = request.headers.get("authorization");
   console.log("Incoming Request Authorization Header:", authHeader); // Log incoming authorization header
   if (!authHeader?.startsWith("Bearer ")) {
@@ -94,6 +94,6 @@ export function getUserIdFromRequest(request: NextRequest): string | null {
 
   const token = authHeader.replace("Bearer ", "");
   console.log("Extracted Token:", token); // Log extracted token
-  const decoded = verifyToken(token);
+  const decoded = await verifyToken(token);
   return decoded?.id || null;
 }

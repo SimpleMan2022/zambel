@@ -1,5 +1,3 @@
-export const runtime = "nodejs";
-
 import { apiResponse, apiError } from "@/lib/api-response";
 import { getUserIdFromRequest } from "@/lib/auth-utils";
 import { NextRequest } from "next/server";
@@ -12,7 +10,7 @@ export async function DELETE(
   try {
     const { product_id } = await context.params;
 
-    const userId = getUserIdFromRequest(request);
+    const userId = await getUserIdFromRequest(request);
 
     if (!userId) {
       return apiError("Unauthorized", 401);
