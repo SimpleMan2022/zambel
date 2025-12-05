@@ -1,99 +1,37 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { verifyToken } from './src/lib/auth';
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { authMiddleware } from "./src/middleware/auth";
 
-type JwtUser = {
-  userId: string;
-  email: string;
-};
+const protectedRoutes = [
+  "/api/cart",
+  "/api/orders",
+  "/api/wishlist",
+  "/api/auth/profile",
+];
 
+export async function middleware(request: NextRequest) {
+  const path = request.nextUrl.pathname;
 
-// Routes yang memerlukan authentication
-const protectedRoutes = ['/cart', '/checkout', '/orders', '/profile'];
-
-// Routes yang hanya bisa diakses jika belum login
-const authRoutes = ['/login', '/register'];
-
-// Routes API yang memerlukan authentication
-const protectedApiRoutes = ['/api/auth/profile', '/api/cart', '/api/orders'];
-
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  // Skip middleware untuk static files dan API routes yang tidak perlu auth
-  if (
-      pathname.startsWith('/_next/') ||
-      pathname.startsWith('/api/auth/login') ||
-      pathname.startsWith('/api/auth/register') ||
-      pathname.includes('. ') // static files
-  ) {
-    return NextResponse.next();
+  // Check if the current path is one of the protected API routes
+  if (protectedRoutes.some((route) => path.startsWith(route))) {
+    return authMiddleware(async (req: NextRequest) => {
+      // If authMiddleware passes, continue to the next handler
+      return NextResponse.next();
+    })(request);
   }
 
-  // Get token from cookies (lebih secure dari localStorage untuk SSR)
-  const token = request.cookies.get('auth-token')?.value;
-
-  let isValidToken = false;
-  let user = null;
-
-  if (token) {
-    try {
-      user = verifyToken(token);
-      isValidToken = !!user;
-    } catch (error) {
-      isValidToken = false;
-    }
-  }
-
-  // Handle protected routes
-  if (protectedRoutes.some(route => pathname.startsWith(route))) {
-    if (!isValidToken) {
-      const loginUrl = new URL('/login', request.url);
-      loginUrl.searchParams.set('redirect', pathname);
-      return NextResponse.redirect(loginUrl);
-    }
-  }
-
-  // Handle auth routes (login/register)
-  if (authRoutes.some(route => pathname. startsWith(route))) {
-    if (isValidToken) {
-      return NextResponse.redirect(new URL('/', request.url));
-    }
-  }
-
-  // Handle protected API routes
-  if (protectedApiRoutes.some(route => pathname.startsWith(route))) {
-    if (!isValidToken) {
-      return NextResponse.json(
-          { success: false, message: 'Unauthorized', error: 'UNAUTHORIZED' },
-          { status: 401 }
-      );
-    }
-
-    // Add user info to headers for API routes
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set('x-user-id', user!.id);
-    requestHeaders.set('x-user-email', user!.email);
-
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    });
-  }
-
+  // For non-protected routes, just continue
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    // Match all API routes under /api, but exclude specific non-protected auth routes if any
+    // For example, you might want to exclude /api/auth/login and /api/auth/register
+    // For now, it will apply to all defined protectedRoutes
+    "/api/cart/:path*",
+    "/api/orders/:path*",
+    "/api/wishlist/:path*",
+    "/api/auth/profile/:path*",
   ],
 };

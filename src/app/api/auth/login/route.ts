@@ -3,7 +3,6 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from 'next/server';
 import { comparePassword, generateToken } from '@/lib/auth'; // Import generateToken from auth.ts
 import {LoginRequest, AuthResponse, User} from '@/types/auth';
-import { cookies } from 'next/headers'; // Import cookies
 import { supabase } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
@@ -60,32 +59,19 @@ export async function POST(request: NextRequest) {
 
     // Generate JWT token
     const token = generateToken(user.id, user.email);
-    console.log("[LOGIN_ROUTE] Token berhasil dibuat. Mengatur cookie...");
+    console.log("[LOGIN_ROUTE] Token berhasil dibuat. Mengirimkan token di respon.");
 
-    // Set JWT as httpOnly cookie
-    const response = NextResponse.json({
+
+    const userWithoutPassword = { ...user, password_hash: undefined };
+    return NextResponse.json<AuthResponse>({
       success: true,
       message: "Login berhasil",
-      data: { user: { ...user, password_hash: undefined } },
+      data: {
+        user: userWithoutPassword,
+        token: token, // ✅ INI WAJIB ADA
+      },
     });
 
-    response.cookies.set({
-      name: "token",
-      value: token,
-      httpOnly: true,
-      secure: true,
-      sameSite: "none",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-      domain: "aditnugroho.my.id",
-    });
-
-    console.log("[LOGIN_ROUTE] Cookie token:", response.cookies.get('token')?.value);
-
-    console.log("[LOGIN_ROUTE] Cookie token telah diatur. Login berhasil.");
-
-    // Hapus password dari response
-   return response
   } catch (error) {
     console.error('[LOGIN_ROUTE] Login error global:', error);
     return NextResponse.json<AuthResponse>(

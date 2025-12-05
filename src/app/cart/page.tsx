@@ -7,6 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ProtectedRoute } from "@/components/protected-route";
 import { MainLayout } from "@/components/main-layout";
+import { apiClient } from "@/lib/auth-utils"; // Import apiClient
 
 interface CartItem {
   id: string;
@@ -54,7 +55,7 @@ export default function CartPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/cart");
+      const response = await apiClient.get("/api/cart"); // Use apiClient.get
       const result = await response.json();
 
       if (result.success) {
@@ -102,12 +103,7 @@ export default function CartPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/cart", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cart_item_id: cartItemId, quantity: quantityToSend }),
-      });
-
+      const response = await apiClient.post("/api/cart", { cart_item_id: cartItemId, quantity: quantityToSend }); // Use apiClient.post
       const result = await response.json();
 
       if (result.success) {
@@ -176,7 +172,7 @@ export default function CartPage() {
       const item = cartItems.find((i) => i.id === cartItemId);
       if (!item) return;
 
-      const response = await fetch(`/api/cart/${item.productId}`, { method: "DELETE" });
+      const response = await apiClient.delete(`/api/cart/${item.productId}`); // Use apiClient.delete
       const result = await response.json();
 
       if (result.success) {

@@ -52,11 +52,11 @@ export default function LoginPage() {
     try {
       const response = await authAPI.login(formData)
 
-      if (response. success && response.data) {
-        login(response.data.user)
+      if (response. success && response.data?.token) {
+        login(response.data.user, response.data.token);
         setTimeout(() => {
-          router.replace("/")
-        }, 1500)
+          router.replace("/");
+        }, 1500);
       } else {
         setAlert({
           show: true,

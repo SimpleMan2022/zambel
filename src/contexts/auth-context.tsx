@@ -9,7 +9,7 @@ type SafeUser = Omit<User, "password_hash">;
 interface AuthContextType {
   user: SafeUser | null;
   token: string | null;
-  login: (user: SafeUser, token?: string) => void;
+  login: (user: SafeUser, token: string) => void;
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -18,16 +18,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Helper untuk membaca cookie
-function getTokenFromCookie(): string | null {
-  if (typeof document === "undefined") return null;
-  console.log("[AUTH_CONTEXT] Semua cookie yang tersedia:", document.cookie); // Log semua cookie
-  const match = document.cookie.match(/token=([^;]+)/);
-  const token = match ? match[1] : null;
-  console.log("[AUTH_CONTEXT] Token dari cookie:", token ? "Ada" : "Tidak ada");
-  return token;
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SafeUser | null>(null);
@@ -38,14 +28,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAuthenticated = !!token;
 
-  // Fetch jumlah item cart
+  // ✅ FETCH USER PROFILE (Bearer)
+  const fetchUserProfile = useCallback(async () => {
+    setIsLoading(true);
+
+    const storedToken = localStorage.getItem("token");
+    if (!storedToken) {
+      setUser(null);
+      setToken(null);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/auth/profile", {
+        headers: {
+          Authorization: `Bearer ${storedToken}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        // ✅ TOKEN VALID → LANJUTKAN SESSION
+        setUser(data.data);
+        setToken(storedToken);
+      } else if (res.status === 401) {
+        // ✅ BARU HAPUS TOKEN KALAU MEMANG INVALID
+        // localStorage.removeItem("token");
+        setUser(null);
+        setToken(null);
+      }
+      // ✅ selain 401 (misal network error, 500) → JANGAN hapus token
+    } catch (error) {
+      console.error("Profile fetch error:", error);
+      // ✅ JANGAN HAPUS TOKEN HANYA KARENA NETWORK ERROR
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // ✅ FETCH CART COUNT (Bearer)
   const fetchCartCount = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !token) return;
 
     try {
       const res = await fetch("/api/cart/count", {
-        credentials: "include", // penting!!!
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
+
       if (!res.ok) return;
 
       const result = await res.json();
@@ -53,94 +86,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setCartItemCount(result.data.count);
       }
     } catch (err) {
-      console.error("[AUTH_CONTEXT] Gagal mengambil jumlah keranjang:", err);
+      console.error("[AUTH] Failed to fetch cart count:", err);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, token]);
 
-  // Fetch user profile dengan cookie
-  const fetchUserProfile = useCallback(async () => {
-    console.log("[AUTH_CONTEXT] Memulai fetch user profile.");
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/auth/profile", {
-        credentials: "include", // WAJIB agar cookie terkirim
-      });
-
-      const data = await res.json();
-      console.log("[AUTH_CONTEXT] Respon dari /api/auth/profile:", data);
-
-      if (res.ok && data.success) {
-        console.log("[AUTH_CONTEXT] Profil user berhasil diambil. Mengatur user dan token.");
-        setUser(data.data);
-        setToken("session"); // token valid, karena cookie ada & diterima
-      } else {
-        console.log("[AUTH_CONTEXT] Gagal mengambil profil user atau tidak terautentikasi.");
-        setUser(null);
-        setToken(null);
-      }
-    } catch (err) {
-      console.error("[AUTH_CONTEXT] Gagal mengambil profil:", err);
-      setUser(null);
-      setToken(null);
-    } finally {
-      setIsLoading(false);
-      console.log("[AUTH_CONTEXT] Selesai fetch user profile.");
-    }
-  }, []);
-
-  // Saat mount: baca cookie dulu, lalu fetch profile
+  // ✅ INIT
   useEffect(() => {
-    console.log("[AUTH_CONTEXT] AuthProvider di-mount. Memeriksa cookie.");
-    const cookieToken = getTokenFromCookie();
-    if (cookieToken) {
-      setToken("session"); // cookie valid → session active
-      console.log("[AUTH_CONTEXT] Cookie token ditemukan, mengatur token ke 'session'.");
-    } else {
-      console.log("[AUTH_CONTEXT] Cookie token tidak ditemukan.");
+    const storedToken = localStorage.getItem("token");
+    if (storedToken) {
+      setToken(storedToken);
     }
     fetchUserProfile();
   }, [fetchUserProfile]);
 
-  // Fetch cart count setelah auth selesai
   useEffect(() => {
-    if (!isLoading) {
-      console.log("[AUTH_CONTEXT] Loading selesai. Memulai fetch cart count.");
+    if (!isLoading && isAuthenticated) {
       fetchCartCount();
     }
-  }, [isLoading, fetchCartCount]);
+  }, [isLoading, isAuthenticated, fetchCartCount]);
 
-  const login = (newUser: SafeUser) => {
-    console.log("[AUTH_CONTEXT] Fungsi login dipanggil. Mengatur user dan token.", newUser);
+  // ✅ LOGIN
+  const login = (newUser: SafeUser, newToken: string) => {
+    localStorage.setItem("token", newToken);
     setUser(newUser);
-    setToken("session"); // token diverifikasi oleh server
+    setToken(newToken);
     fetchCartCount();
   };
 
-  const logout = async () => {
-    console.log("[AUTH_CONTEXT] Fungsi logout dipanggil. Menghapus cookie di server.");
-    try {
-      const res = await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include", // hapus cookie di server
-      });
-
-      if (res.ok) {
-        console.log("[AUTH_CONTEXT] Logout berhasil. Mereset state.");
-        setUser(null);
-        setToken(null);
-        setCartItemCount(0);
-        router.push("/");
-      } else {
-        console.error("[AUTH_CONTEXT] Logout gagal:", res.statusText);
-      }
-    } catch (err) {
-      console.error("[AUTH_CONTEXT] Error saat logout:", err);
-    }
-  };
-
-  const updateCartItemCount = (count: number) => {
-    console.log("[AUTH_CONTEXT] Memperbarui jumlah item keranjang:", count);
-    setCartItemCount(count);
+  // ✅ LOGOUT
+  const logout = () => {
+    localStorage.removeItem("token");
+    setUser(null);
+    setToken(null);
+    setCartItemCount(0);
+    router.push("/login");
   };
 
   return (
@@ -153,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated,
         isLoading,
         cartItemCount,
-        updateCartItemCount,
+        updateCartItemCount: setCartItemCount,
       }}
     >
       {children}

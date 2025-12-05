@@ -18,6 +18,7 @@ export const verifyToken = (token: string): TokenPayload | null => {
   }
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload;
+    console.log("Decoded Token Payload:", decoded); // Log decoded payload
     return decoded;
   } catch (error) {
     console.error("Error verifying JWT token:", error);
@@ -36,31 +37,24 @@ export const isTokenExpired = (token: string): boolean => {
   }
 };
 
-export const getClientToken = (): string | null => {
-  if (typeof window === 'undefined') return null;
-
-  const cookies = document.cookie.split(';');
-  const authCookie = cookies.find(cookie =>
-      cookie.trim().startsWith('token=')
-  );
-
-  return authCookie ? authCookie.split('=')[1] : null;
-};
-
 export const apiClient = {
   async request(url: string, options: RequestInit = {}) {
     const headers = new Headers(options.headers);
     headers.set("Content-Type", "application/json");
-    console.log("url", url);  
+
+    const token = localStorage.getItem("token");
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    console.log("Client Request URL:", url);
+    console.log("Client Request Authorization Header:", headers.get("Authorization")); // Log client authorization header
     const response = await fetch(url, {
       ...options,
       headers,
-      credentials: "include", 
     });
 
     if (response.status === 401) {
-      document.cookie =
-        "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      // localStorage.removeItem("token");
       window.location.href = "/login";
       throw new Error("Unauthorized");
     }
@@ -90,24 +84,16 @@ export const apiClient = {
   },
 };
 
-
 export function getUserIdFromRequest(request: NextRequest): string | null {
-  console.log("[AUTH_UTILS] Mencoba mendapatkan user ID dari request.");
-  const token = request.cookies.get('token')?.value; // Read from httpOnly cookie
-  console.log("[AUTH_UTILS] Token dari request cookies:", token ? "Ada" : "Tidak ada");
-  console.log("[AUTH_UTILS] Request cookies object:", request.cookies);
-
-  if (!token) {
-    console.log("[AUTH_UTILS] Token tidak ditemukan di request cookies.");
+  const authHeader = request.headers.get("authorization");
+  console.log("Incoming Request Authorization Header:", authHeader); // Log incoming authorization header
+  if (!authHeader?.startsWith("Bearer ")) {
+    console.log("No Bearer token found in Authorization header.");
     return null;
   }
 
-  try {
-    const decoded = verifyToken(token);
-    console.log("[AUTH_UTILS] Token berhasil didekode.", decoded?.id ? `User ID: ${decoded.id}` : "Tidak ada User ID");
-    return decoded?.id || null;
-  } catch (error) {
-    console.error("[AUTH_UTILS] Error di getUserIdFromRequest:", error);
-    return null;
-  }
+  const token = authHeader.replace("Bearer ", "");
+  console.log("Extracted Token:", token); // Log extracted token
+  const decoded = verifyToken(token);
+  return decoded?.id || null;
 }

@@ -49,6 +49,8 @@ export const verifyToken = (token: string): JwtPayload |null => {
     return null;
   }
   try {
+    console.log("[AUTH_LIB] Token yang akan diverifikasi:", token);
+    console.log("[AUTH_LIB] JWT_SECRET yang digunakan:", JWT_SECRET);
     const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
     console.log("[AUTH_LIB] Token JWT berhasil diverifikasi.", decoded);
     return decoded;

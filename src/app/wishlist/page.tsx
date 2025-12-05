@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/contexts/auth-context";
 import { RiDeleteBinLine, RiStarFill, RiStarHalfFill, RiStarLine } from "@remixicon/react";
+import {apiClient} from "@/lib/auth-utils"
 
 interface WishlistItem {
   id: string;
@@ -35,7 +36,7 @@ export default function WishlistPage() {
     const fetchWishlist = async () => {
       try {
         setLoading(true);
-        const response = await fetch("/api/wishlist");
+        const response = await apiClient.get("/api/wishlist");
         const result = await response.json();
 
         if (result.success) {
@@ -57,9 +58,7 @@ export default function WishlistPage() {
   const handleRemoveFromWishlist = async (productId: string) => {
     if (!isAuthenticated) return;
     try {
-      const response = await fetch(`/api/wishlist/${productId}`, {
-        method: 'DELETE',
-      });
+      const response = await apiClient.delete(`/api/wishlist/${productId}`);
       const result = await response.json();
 
       if (result.success) {

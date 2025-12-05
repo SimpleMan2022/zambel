@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { apiResponse, apiError } from '@/lib/api-response';
 import { getUserIdFromRequest } from '@/lib/auth-utils';
 import { v4 as uuidv4 } from 'uuid';
