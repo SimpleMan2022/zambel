@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
       secure: true,
       sameSite: "none",
       path: "/",
+      domain: ".aditnugroho.my.id",
       maxAge: 60 * 60 * 24 * 7,
     });
 
