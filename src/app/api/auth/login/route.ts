@@ -76,9 +76,11 @@ export async function POST(request: NextRequest) {
       secure: true,
       sameSite: "none",
       path: "/",
-      domain: ".aditnugroho.my.id",
       maxAge: 60 * 60 * 24 * 7,
     });
+
+   
+    console.log("[LOGIN_ROUTE] Cookie token:", response.cookies.get('token')?.value);
 
     console.log("[LOGIN_ROUTE] Cookie token telah diatur. Login berhasil.");
 
