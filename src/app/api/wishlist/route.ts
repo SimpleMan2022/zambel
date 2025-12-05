@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { apiResponse, apiError } from "@/lib/api-response";
 import { getUserIdFromRequest } from "@/lib/auth-utils"; 
 import { NextRequest } from "next/server";
