@@ -14,21 +14,23 @@ export async function POST(request: NextRequest) {
       return apiError("Missing MIDTRANS_SERVER_KEY", 500);
     }
 
-    // Verify signature
-    const expectedSignature = crypto.createHash("sha512")
+    // ✅ VERIFY SIGNATURE
+    const expectedSignature = crypto
+      .createHash("sha512")
       .update(
         notification.order_id +
-        notification.status_code +
-        notification.gross_amount +
-        MIDTRANS_SERVER_KEY
+          notification.status_code +
+          notification.gross_amount +
+          MIDTRANS_SERVER_KEY
       )
       .digest("hex");
 
     if (expectedSignature !== notification.signature_key) {
+      console.error("Invalid Midtrans signature");
       return apiError("Invalid signature", 403);
     }
 
-    const orderNumber = notification.order_id; // we use order_number for Midtrans
+    const orderNumber = notification.order_id;
     const ts = notification.transaction_status;
     const fs = notification.fraud_status;
 
@@ -46,9 +48,12 @@ export async function POST(request: NextRequest) {
     } else if (ts === "cancel" || ts === "expire" || ts === "deny") {
       paymentStatus = "failed";
       orderStatus = "cancelled";
+    } else if (ts === "refund" || ts === "partial_refund" || ts === "chargeback") {
+      paymentStatus = "refunded";
+      orderStatus = "cancelled";
     }
 
-    // --- UPDATE ORDERS TABLE ---
+    // ✅ UPDATE ORDER (ORDER_NUMBER ATAU MIDTRANS_ORDER_ID)
     const { data: updatedOrder, error: updateOrderError } = await supabase
       .from("orders")
       .update({
@@ -67,23 +72,30 @@ export async function POST(request: NextRequest) {
       return apiError("Failed to update order status", 500);
     }
 
-    // --- OPTIONAL: SAVE TO PAYMENTS TABLE ---
-    const { error: insertPaymentError } = await supabase
+    // ✅ ANTI DUPLICATE PAYMENT
+    const { data: existingPayment } = await supabase
       .from("payments")
-      .insert({
-        id: uuidv4(),
-        order_id: updatedOrder.id,
-        user_id: updatedOrder.user_id,
-        midtrans_transaction_id: notification.transaction_id,
-        midtrans_order_id: orderNumber,
-        amount: updatedOrder.total,
-        payment_method: notification.payment_type,
-        status: paymentStatus,
-      });
+      .select("id")
+      .eq("midtrans_transaction_id", notification.transaction_id)
+      .single();
 
-    if (insertPaymentError) {
-      console.error("Error inserting payment:", insertPaymentError);
-      // Log the error but don't necessarily fail the webhook, as order update is more critical
+    if (!existingPayment) {
+      const { error: insertPaymentError } = await supabase
+        .from("payments")
+        .insert({
+          id: uuidv4(),
+          order_id: updatedOrder.id,
+          user_id: updatedOrder.user_id,
+          midtrans_transaction_id: notification.transaction_id,
+          midtrans_order_id: orderNumber,
+          amount: updatedOrder.total,
+          payment_method: notification.payment_type,
+          status: paymentStatus,
+        });
+
+      if (insertPaymentError) {
+        console.error("Error inserting payment:", insertPaymentError);
+      }
     }
 
     return apiResponse({ message: "Webhook processed successfully" });

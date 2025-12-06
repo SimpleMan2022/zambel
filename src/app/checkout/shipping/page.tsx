@@ -15,7 +15,7 @@ interface CartItem {
   price: number;
   imageUrl: string;
   quantity: number;
-  weight?: number; // Assume product has a weight
+  weight?: number;
 }
 
 interface ShippingOption {
@@ -34,60 +34,69 @@ interface AddressFormData {
   provinceCode: string;
   regencyCode: string;
   districtCode: string;
-  // ... other address fields from formData in checkout/address/page.tsx
 }
 
 interface SelectedShippingMethod {
   courierCode: string;
   service: string;
-  description: string; // Added description
+  description: string;
   cost: number;
   etd: string;
-  total_weight: number; // Added total_weight
-  origin_district_code: string; // Added origin_district_code
-  destination_district_code: string; // Added destination_district_code
+  total_weight: number;
+  origin_district_code: string;
+  destination_district_code: string;
 }
 
-// TODO: Make this configurable via environment variables or database
-const SHOP_ORIGIN_DISTRICT_CODE = "3575"; // Your shop's origin district code
+const SHOP_ORIGIN_DISTRICT_CODE = "3575";
 
 export default function CheckoutShippingPage() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, token } = useAuth(); // ✅ token ditambahkan
+
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartLoading, setIsCartLoading] = useState(true);
   const [cartError, setCartError] = useState<string | null>(null);
+
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
   const [isLoadingShipping, setIsLoadingShipping] = useState(false);
   const [shippingError, setShippingError] = useState<string | null>(null);
-  const [selectedShipping, setSelectedShipping] = useState<SelectedShippingMethod | null>(null);
 
+  const [selectedShipping, setSelectedShipping] = useState<SelectedShippingMethod | null>(null);
   const [addressData, setAddressData] = useState<AddressFormData | null>(null);
 
-  // Remove dummy address data fallback as we rely on localStorage now
+  // ✅ Ambil alamat dari localStorage
   useEffect(() => {
     const storedAddress = localStorage.getItem('checkoutAddressFormData');
     if (storedAddress) {
       setAddressData(JSON.parse(storedAddress));
     } else {
-      // Redirect to address page if no address data found
       router.replace("/checkout/address");
     }
   }, [router]);
 
-  const fetchCartItems = useCallback(async () => {
-    if (!isAuthenticated) {
+  // ✅ FETCH CART — SEKARANG PAKAI AUTH HEADER
+  const fetchCartItems = useCallback(async (authToken: string | null) => {
+    if (!isAuthenticated || !authToken) {
       setIsCartLoading(false);
       return;
     }
+
     setIsCartLoading(true);
     setCartError(null);
+
     try {
-      const response = await fetch("/api/cart");
+      const response = await fetch("/api/cart", {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
       if (!response.ok) {
         throw new Error("Failed to fetch cart items");
       }
+
       const result = await response.json();
+
       if (result.success) {
         setCartItems(result.data);
       } else {
@@ -101,26 +110,33 @@ export default function CheckoutShippingPage() {
     }
   }, [isAuthenticated]);
 
+  // ✅ TOTAL WEIGHT
   const calculateTotalWeight = useCallback(() => {
-    // Sum of all product weights in grams. Assuming 200g if product.weight is undefined.
-    return cartItems.reduce((total, item) => total + (item.quantity * (item.weight || 200)), 0); 
+    return cartItems.reduce(
+      (total, item) => total + (item.quantity * (item.weight || 200)),
+      0
+    );
   }, [cartItems]);
 
+  // ✅ FETCH SHIPPING OPTIONS
   const fetchShippingOptions = useCallback(async () => {
     if (!addressData || !addressData.districtCode || cartItems.length === 0) return;
 
     setIsLoadingShipping(true);
     setShippingError(null);
+
     try {
       const totalWeight = calculateTotalWeight();
+
       const response = await fetch("/api/shipping-options", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           origin_district_code: SHOP_ORIGIN_DISTRICT_CODE,
-          destination_district_code: addressData.districtCode, 
+          destination_district_code: addressData.districtCode,
           total_weight: totalWeight,
         }),
       });
@@ -130,32 +146,35 @@ export default function CheckoutShippingPage() {
       }
 
       const result = await response.json();
+
       if (result.success) {
         setShippingOptions(result.data);
-        // Automatically select the lowest cost option by default if available
+
         if (result.data.length > 0) {
-          const allServices = result.data.flatMap((courier: ShippingOption) => courier.services.map(service => ({
-            ...service, 
-            courierCode: courier.code, 
-            courierName: courier.name
-          })));
+          const allServices = result.data.flatMap((courier: ShippingOption) =>
+            courier.services.map(service => ({
+              ...service,
+              courierCode: courier.code,
+            }))
+          );
+
           if (allServices.length > 0) {
-            const lowestCostService = allServices.reduce((prev: any, current: any) => 
+            const lowestCostService = allServices.reduce((prev: any, current: any) =>
               (prev.cost < current.cost) ? prev : current
             );
+
             setSelectedShipping({
               courierCode: lowestCostService.courierCode,
               service: lowestCostService.service,
-              description: lowestCostService.description, // Added
+              description: lowestCostService.description,
               cost: lowestCostService.cost,
               etd: lowestCostService.etd,
-              total_weight: totalWeight, // Added
-              origin_district_code: SHOP_ORIGIN_DISTRICT_CODE, // Added
-              destination_district_code: addressData.districtCode, // Added
+              total_weight: totalWeight,
+              origin_district_code: SHOP_ORIGIN_DISTRICT_CODE,
+              destination_district_code: addressData.districtCode,
             });
           }
         }
-
       } else {
         setShippingError(result.message || "Failed to fetch shipping options");
       }
@@ -167,32 +186,42 @@ export default function CheckoutShippingPage() {
     }
   }, [addressData, cartItems, calculateTotalWeight]);
 
+  // ✅ AUTH FLOW SERAGAM
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      fetchCartItems();
-    } else if (!authLoading && !isAuthenticated) {
-      router.replace("/login");
+    if (!authLoading) {
+      if (isAuthenticated && token) {
+        fetchCartItems(token);
+      } else {
+        router.replace("/login");
+      }
     }
-  }, [authLoading, isAuthenticated, fetchCartItems, router]);
+  }, [authLoading, isAuthenticated, token, fetchCartItems, router]);
 
+  // ✅ FETCH ONGKIR SETELAH CART & ADDRESS READY
   useEffect(() => {
-    // Only fetch shipping options if cart is loaded and address data is available and complete
-    if (cartItems.length > 0 && addressData && addressData.districtCode && !isCartLoading) {
+    if (cartItems.length > 0 && addressData?.districtCode && !isCartLoading) {
       fetchShippingOptions();
     }
   }, [cartItems, addressData, fetchShippingOptions, isCartLoading]);
 
-  const handleSelectShipping = (courierCode: string, serviceName: string, description: string, cost: number, etd: string) => {
+  const handleSelectShipping = (
+    courierCode: string,
+    serviceName: string,
+    description: string,
+    cost: number,
+    etd: string
+  ) => {
     const totalWeight = calculateTotalWeight();
+
     setSelectedShipping({
       courierCode,
       service: serviceName,
-      description, // Pass description
+      description,
       cost,
       etd,
       total_weight: totalWeight,
       origin_district_code: SHOP_ORIGIN_DISTRICT_CODE,
-      destination_district_code: addressData!.districtCode, // addressData is guaranteed by now
+      destination_district_code: addressData!.districtCode,
     });
   };
 
@@ -207,9 +236,7 @@ export default function CheckoutShippingPage() {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(value);
   };
 
-  const totalOrderAmount = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
   const currentShippingCost = selectedShipping ? selectedShipping.cost : 0;
-  // const finalTotal = totalOrderAmount + currentShippingCost; // Not needed here, calculated in payment
 
   if (authLoading || isCartLoading || !addressData || !addressData.districtCode || isLoadingShipping) {
     return (

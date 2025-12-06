@@ -32,9 +32,8 @@ interface OrderDetails {
   payment_status: string;
   snap_token: string;
   midtrans_order_id: string;
-  created_at: string;
+  created_at: string | null;
 
-  // flat address from API
   ship_recipient_name: string;
   ship_phone: string;
   ship_street: string;
@@ -50,40 +49,53 @@ interface OrderDetails {
 export default function OrderConfirmationPage() {
   const { order_id } = useParams();
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, token } = useAuth(); // ✅ token dipakai
 
   const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ✅ FIXED: FETCH ORDER DETAIL WITH AUTH HEADER
   const fetchOrderDetails = useCallback(async () => {
-    if (!isAuthenticated || !order_id) {
+    if (!isAuthenticated || !order_id || !token) {
       setIsLoading(false);
       return;
     }
+
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(`/api/orders/${order_id}`);
-      const result = await response.json( );
+      const response = await fetch(`/api/orders/${order_id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`, // ✅ FIX UTAMA
+        },
+      });
+
+      const result = await response.json();
       console.log("result", result);
-      if (result.success) {
+
+      if (response.ok && result.success) {
         setOrderDetails(result.data);
       } else {
-        setError(result.message);
+        setError(result.message || "Gagal memuat detail pesanan");
       }
+
     } catch (err) {
+      console.error("Fetch order error:", err);
       setError("Gagal memuat detail pesanan");
     } finally {
       setIsLoading(false);
     }
-  }, [order_id, isAuthenticated]);
+  }, [order_id, isAuthenticated, token]);
 
   useEffect(() => {
     if (!authLoading) {
-      if (isAuthenticated) fetchOrderDetails();
-      else router.replace("/login");
+      if (isAuthenticated) {
+        fetchOrderDetails();
+      } else {
+        router.replace("/login");
+      }
     }
   }, [authLoading, isAuthenticated, fetchOrderDetails, router]);
 
@@ -139,13 +151,20 @@ export default function OrderConfirmationPage() {
             <div className="bg-gray-50 p-6 rounded-lg border text-left mb-8">
               <h2 className="text-xl font-bold mb-4">Ringkasan Pesanan</h2>
               <p>Nomor Pesanan: <b>{orderDetails.order_number}</b></p>
-              <p>Tanggal: <b>{new Date(orderDetails.created_at).toLocaleString("id-ID")}</b></p>
-              <p>Status Pembayaran: 
+              <p>
+                Tanggal:{" "}
+                <b>
+                  {orderDetails.created_at
+                    ? new Date(orderDetails.created_at).toLocaleString("id-ID")
+                    : "-"}
+                </b>
+              </p>
+              <p>Status Pembayaran:
                 <b className="ml-2">
                   {orderDetails.payment_status.toUpperCase()}
                 </b>
               </p>
-              <p>Status Pesanan: 
+              <p>Status Pesanan:
                 <b className="ml-2">
                   {orderDetails.order_status.toUpperCase()}
                 </b>
@@ -158,9 +177,14 @@ export default function OrderConfirmationPage() {
               <p><b>{orderDetails.ship_recipient_name}</b></p>
               <p>{orderDetails.ship_phone}</p>
               <p>{orderDetails.ship_street}</p>
-              <p>{orderDetails.ship_city}, {orderDetails.ship_province} {orderDetails.ship_postal_code}</p>
+              <p>
+                {orderDetails.ship_city}, {orderDetails.ship_province}{" "}
+                {orderDetails.ship_postal_code}
+              </p>
               {orderDetails.ship_label && (
-                <p className="text-sm italic mt-2">Catatan: {orderDetails.ship_label}</p>
+                <p className="text-sm italic mt-2">
+                  Catatan: {orderDetails.ship_label}
+                </p>
               )}
             </div>
 

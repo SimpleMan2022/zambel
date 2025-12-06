@@ -19,6 +19,7 @@ interface ShippingDetailsCardProps {
     phone: string
   }
   courier: {
+    code: string
     name: string
     resi: string
   }
@@ -57,7 +58,7 @@ export function ShippingDetailsCard({ deliveryStore, receiver, courier, orderIte
         {/* Kurir */}
         <div className="mb-6 pb-6 border-b border-gray-200">
           <h3 className="font-semibold text-gray-900 mb-2">Kurir</h3>
-          <p className="text-gray-700">{courier.name}</p>
+          <p className="text-gray-700">{courier.code.toUpperCase()} {courier.name}</p>
           <p className="text-sm text-gray-600">Resi: {courier.resi}</p>
         </div>
 

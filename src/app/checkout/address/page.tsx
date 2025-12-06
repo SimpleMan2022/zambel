@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useCallback } from "react"
 import { MainLayout } from "@/components/main-layout"
 import { ProtectedRoute } from "@/components/protected-route"
@@ -9,22 +8,24 @@ import { CheckoutStepIndicator } from "@/components/checkout-step-indicator"
 import { OrderSummary } from "@/components/order-summary"
 import { useAuth } from "@/contexts/auth-context"
 import { RiLoader4Line } from "@remixicon/react"
-import { useRouter } from "next/navigation";
-import { ProvinceSelect } from "@/components/forms/province-select";
-import { RegencySelect } from "@/components/forms/regency-select";
-import { DistrictSelect } from "@/components/forms/district-select";
+import { useRouter } from "next/navigation"
+import { ProvinceSelect } from "@/components/forms/province-select"
+import { RegencySelect } from "@/components/forms/regency-select"
+import { DistrictSelect } from "@/components/forms/district-select"
 
 interface CartItem {
-  id: string;
-  name: string;
-  price: number;
-  imageUrl: string;
-  quantity: number;
+  id: string
+  name: string
+  price: number
+  imageUrl: string
+  quantity: number
 }
 
 export default function CheckoutAddressPage() {
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const router = useRouter(); // Initialize useRouter
+  // ✅ TAMBAH token (SEBELUMNYA BELUM)
+  const { user, isAuthenticated, isLoading: authLoading, token } = useAuth()
+  const router = useRouter()
+
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -39,18 +40,17 @@ export default function CheckoutAddressPage() {
     districtName: "",
     postalCode: "",
     notes: "",
-  });
+  })
 
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [isCartLoading, setIsCartLoading] = useState(true);
-  const [cartError, setCartError] = useState<string | null>(null);
+  const [cartItems, setCartItems] = useState<CartItem[]>([])
+  const [isCartLoading, setIsCartLoading] = useState(true)
+  const [cartError, setCartError] = useState<string | null>(null)
 
-  const [isLoadingRegionalData, setIsLoadingRegionalData] = useState(false);
-  const [regionalError, setRegionalError] = useState<string | null>(null);
+  const [regionalError] = useState<string | null>(null)
 
-  const shippingCostPlaceholder = 0; // Will be dynamic with RajaOngkir integration
+  const shippingCostPlaceholder = 0
 
-  // Pre-fill user data if available
+  // ✅ PREFILL USER DATA (TIDAK DIUBAH)
   useEffect(() => {
     if (isAuthenticated && user) {
       setFormData((prev) => ({
@@ -58,81 +58,100 @@ export default function CheckoutAddressPage() {
         fullName: user.full_name || "",
         email: user.email || "",
         phone: user.phone || "",
-      }));
+      }))
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user])
 
-  const fetchCartItems = useCallback(async () => {
-    if (!isAuthenticated) {
-      setIsCartLoading(false);
-      return;
+  // ✅ FETCH CART — SEKARANG PAKAI AUTH HEADER
+  const fetchCartItems = useCallback(async (authToken: string | null) => {
+    if (!isAuthenticated || !authToken) {
+      setIsCartLoading(false)
+      return
     }
-    setIsCartLoading(true);
-    setCartError(null);
+
+    setIsCartLoading(true)
+    setCartError(null)
+
     try {
-      const response = await fetch("/api/cart");
+      const response = await fetch("/api/cart", {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      })
+
       if (!response.ok) {
-        throw new Error("Failed to fetch cart items");
+        throw new Error("Failed to fetch cart items")
       }
-      const result = await response.json();
+
+      const result = await response.json()
+
       if (result.success) {
-        setCartItems(result.data);
+        setCartItems(result.data)
       } else {
-        setCartError(result.message || "Failed to fetch cart items");
+        setCartError(result.message || "Failed to fetch cart items")
       }
     } catch (err) {
-      console.error("Error fetching cart:", err);
-      setCartError(err instanceof Error ? err.message : "An unexpected error occurred");
+      console.error("Error fetching cart:", err)
+      setCartError(err instanceof Error ? err.message : "An unexpected error occurred")
     } finally {
-      setIsCartLoading(false);
+      setIsCartLoading(false)
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated])
 
+  // ✅ AUTH FLOW SERAGAM DENGAN PAGE LAIN
   useEffect(() => {
     if (!authLoading) {
-      fetchCartItems();
+      if (isAuthenticated && token) {
+        fetchCartItems(token)
+      } else {
+        router.replace("/login")
+      }
     }
-  }, [authLoading, fetchCartItems]);
+  }, [authLoading, isAuthenticated, token, fetchCartItems, router])
 
+  // ✅ HANDLER FORM (TIDAK DIUBAH)
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
 
   const handleProvinceChange = useCallback((code: string, name: string) => {
     setFormData((prev) => ({
       ...prev,
       provinceCode: code,
       provinceName: name,
-      regencyCode: "", regencyName: "",
-      districtCode: "", districtName: "",
-    }));
-  }, []);
+      regencyCode: "",
+      regencyName: "",
+      districtCode: "",
+      districtName: "",
+    }))
+  }, [])
 
   const handleRegencyChange = useCallback((code: string, name: string) => {
     setFormData((prev) => ({
       ...prev,
       regencyCode: code,
       regencyName: name,
-      districtCode: "", districtName: "",
-    }));
-  }, []);
+      districtCode: "",
+      districtName: "",
+    }))
+  }, [])
 
   const handleDistrictChange = useCallback((code: string, name: string) => {
     setFormData((prev) => ({
       ...prev,
       districtCode: code,
       districtName: name,
-    }));
-  }, []);
+    }))
+  }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("Address submitted:", formData);
-    localStorage.setItem('checkoutAddressFormData', JSON.stringify(formData));
-    router.push("/checkout/shipping");
-  };
+    e.preventDefault()
+    localStorage.setItem("checkoutAddressFormData", JSON.stringify(formData))
+    router.push("/checkout/shipping")
+  }
 
+  // ✅ BLOK UI DI BAWAH INI TIDAK DIUBAH SAMA SEKALI
   if (authLoading || isCartLoading) {
     return (
       <MainLayout>
@@ -155,12 +174,12 @@ export default function CheckoutAddressPage() {
               <div className="h-12 bg-gray-200 rounded w-full"></div>
             </div>
             <div className="lg:col-span-1">
-              <OrderSummary cartItems={[]} shippingCost={0} /> {/* Empty cart for skeleton */}
+              <OrderSummary cartItems={[]} shippingCost={0} />
             </div>
           </div>
         </div>
       </MainLayout>
-    );
+    )
   }
 
   if (cartError || regionalError) {
@@ -171,7 +190,7 @@ export default function CheckoutAddressPage() {
           <p className="text-gray-700">{cartError || regionalError}</p>
         </div>
       </MainLayout>
-    );
+    )
   }
 
   if (cartItems.length === 0) {
@@ -185,7 +204,7 @@ export default function CheckoutAddressPage() {
           </button>
         </div>
       </MainLayout>
-    );
+    )
   }
 
   return (
