@@ -9,7 +9,8 @@ import { RiLoader4Line, RiUserLine, RiKey2Line, RiCheckLine, RiErrorWarningLine 
 // import { toast } from "react-toastify" // Removed react-toastify import
 
 export default function ProfilePage() {
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading, token } = useAuth()
+
   const router = useRouter()
 
   const [currentPassword, setCurrentPassword] = useState("")
@@ -69,6 +70,7 @@ export default function ProfilePage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           currentPassword,

@@ -442,7 +442,10 @@ export default function ProductDetailPage() {
                 >
                   Tambah ke Keranjang
                 </button>
-                <button className="flex-1 bg-primary-red text-white font-semibold py-3 rounded-lg hover:bg-red-600 transition">
+                <button
+                  onClick={handleAddToCart}
+                  className="flex-1 bg-primary-red text-white font-semibold py-3 rounded-lg hover:bg-red-600 transition"
+                >
                   Beli Sekarang
                 </button>
               </div>

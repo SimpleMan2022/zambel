@@ -64,13 +64,6 @@ export default function KontakPage() {
       <div className="min-h-screen bg-gray-50">
         {/* Hero Section */}
         <section className="relative bg-gradient-to-r from-red-800 to-gray-900 text-white py-20 md:py-32 overflow-hidden text-center">
-          <Image 
-            src="/images/contact-hero.jpg" // Placeholder image
-            alt="Kontak Kami Hero"
-            fill 
-            style={{ objectFit: 'cover', opacity: 0.2 }}
-            className="absolute inset-0 z-0"
-          />
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
             <h1 className="text-5xl md:text-7xl font-extrabold mb-4 animate-fade-in-up">
               Hubungi Kami
@@ -221,7 +214,7 @@ export default function KontakPage() {
             <div className="aspect-w-16 aspect-h-9 bg-gray-200 rounded-lg overflow-hidden shadow-xl">
               {/* Placeholder for Google Maps iframe or component */}
               <iframe
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3966.305942702758!2d106.8159157147699!3d-6.22104599550731!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2e69f3e4d9c7e0b5%3A0x6e7e7e7e7e7e7e7e!2sGelora%20Bung%20Karno%20Main%20Stadium!5e0!3m2!1sen!2sid!4v1678901234567!5m2!1sen!2sid"
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2815.521811171597!2d98.51212576610354!3d3.6445948588426234!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x30312a473a03136b%3A0x83d69fa76beffd98!2sGg.%20Abadi%20I%2C%20Jati%20Karya%2C%20Kec.%20Binjai%20Utara%2C%20Kota%20Binjai%2C%20Sumatera%20Utara%2020374!5e0!3m2!1sid!2sid!4v1765003997903!5m2!1sid!2sid"
                 width="100%"
                 height="450"
                 style={{ border: 0 }}

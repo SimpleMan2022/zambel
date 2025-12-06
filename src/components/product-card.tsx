@@ -27,7 +27,7 @@ interface ProductCardProps {
 
 export default function ProductCard({ product, onAddToCartSuccess }: ProductCardProps) {
   const { id, name, price, image_url, rating, review_count, description } = product;
-  const { isAuthenticated, updateCartItemCount } = useAuth();
+  const { isAuthenticated, updateCartItemCount, token } = useAuth();
   const router = useRouter(); // Initialize useRouter
 
   const formatPrice = (value: number) => {
@@ -35,28 +35,47 @@ export default function ProductCard({ product, onAddToCartSuccess }: ProductCard
   };
 
   const handleAddToCart = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation(); // Prevent Link navigation
-    e.preventDefault(); // Prevent default button behavior
-    if (!isAuthenticated) {
-      router.push("/login"); // Redirect to login page
+    e.stopPropagation();
+    e.preventDefault();
+  
+    if (!isAuthenticated || !token) {
+      router.push("/login");
       return;
     }
+  
     try {
       const response = await fetch("/api/cart", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: id, quantity: 1 }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // ✅ INI YANG HILANG
+        },
+        body: JSON.stringify({
+          product_id: id,
+          quantity: 1,
+        }),
       });
+  
       const result = await response.json();
+  
       if (response.ok && result.success) {
-        updateCartItemCount(result.data?.count || (await fetch('/api/cart/count').then(res => res.json()).then(data => data.data.count)));
-        onAddToCartSuccess?.(name); // Call the new prop on success
+        // ✅ Update cart count (lebih aman)
+        const countRes = await fetch("/api/cart/count", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const countData = await countRes.json();
+  
+        updateCartItemCount(countData.data?.count || 0);
+  
+        onAddToCartSuccess?.(name);
       } else {
-        alert(result.message || "Failed to add product to cart.");
+        alert(result.message || "Gagal menambahkan ke keranjang.");
       }
     } catch (err) {
       console.error("Error adding to cart:", err);
-      alert("An error occurred while adding to cart.");
+      alert("Terjadi kesalahan saat menambahkan ke keranjang.");
     }
   };
 
